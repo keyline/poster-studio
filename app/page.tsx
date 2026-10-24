@@ -1,265 +1,210 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { EXPERTS } from "@/lib/experts";
+import { useCallback, useEffect, useState } from "react";
+import BrandForm from "@/components/BrandForm";
+import BrandView from "@/components/BrandView";
+import Studio from "@/components/Studio";
+import { api, getPassword, onAuthNeeded, setPassword } from "@/lib/client";
+import type { Brand } from "@/lib/types";
 
-type Poster = { id: string; src?: string; error?: string; expert: string; orientation: string };
-
-const PASSWORD_KEY = "poster-studio-password";
+type View =
+  | { name: "brands" }
+  | { name: "new" }
+  | { name: "edit"; id: string }
+  | { name: "brand"; id: string }
+  | { name: "studio" };
 
 export default function Home() {
-  const [expertId, setExpertId] = useState(EXPERTS[0].id);
-  const [brief, setBrief] = useState({
-    headline: "",
-    details: "",
-    audience: "",
-    style: "",
-    colors: "",
-    notes: "",
-  });
-  const [orientation, setOrientation] = useState("portrait");
-  const [quality, setQuality] = useState("medium");
-  const [count, setCount] = useState(2);
+  const [view, setView] = useState<View>({ name: "brands" });
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [persistent, setPersistent] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [studioBrandId, setStudioBrandId] = useState("");
+  const [askPassword, setAskPassword] = useState(false);
+  const [pw, setPw] = useState("");
 
-  const [prompt, setPrompt] = useState("");
-  const [writing, setWriting] = useState(false);
-  const [posters, setPosters] = useState<Poster[]>([]);
-  const [error, setError] = useState("");
-
-  const [password, setPassword] = useState("");
-  const [needsPassword, setNeedsPassword] = useState(false);
-
-  useEffect(() => {
+  const load = useCallback(async () => {
     try {
-      const saved = localStorage.getItem(PASSWORD_KEY);
-      if (saved) setPassword(saved);
-    } catch {}
+      const data = await api<{ brands: Brand[]; persistent: boolean }>("/api/brands");
+      setBrands(data.brands);
+      setPersistent(data.persistent);
+      setLoadError("");
+    } catch (e) {
+      setLoadError((e as Error).message);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
-  function savePassword(value: string) {
-    setPassword(value);
-    try {
-      localStorage.setItem(PASSWORD_KEY, value);
-    } catch {}
+  useEffect(() => {
+    onAuthNeeded(() => setAskPassword(true));
+    setPw(getPassword());
+    load();
+  }, [load]);
+
+  const upsert = (b: Brand) => setBrands((all) => [b, ...all.filter((x) => x.id !== b.id)]);
+  const current = "id" in view ? brands.find((b) => b.id === view.id) : undefined;
+
+  function openStudio(brandId?: string) {
+    if (brandId) setStudioBrandId(brandId);
+    else if (!studioBrandId && brands[0]) setStudioBrandId(brands[0].id);
+    setView({ name: "studio" });
+    window.scrollTo({ top: 0 });
   }
-
-  async function api<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-app-password": password },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
-    if (res.status === 401) setNeedsPassword(true);
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-    return data as T;
-  }
-
-  async function writePrompt() {
-    setError("");
-    setWriting(true);
-    try {
-      const { prompt } = await api<{ prompt: string }>("/api/prompt", { expertId, orientation, ...brief });
-      setPrompt(prompt);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setWriting(false);
-    }
-  }
-
-  async function generate() {
-    setError("");
-    const expert = EXPERTS.find((e) => e.id === expertId)!.name;
-    const batch: Poster[] = Array.from({ length: count }, () => ({
-      id: crypto.randomUUID(),
-      expert,
-      orientation,
-    }));
-    setPosters((p) => [...batch, ...p]);
-
-    await Promise.all(
-      batch.map(async (poster) => {
-        let update: Partial<Poster>;
-        try {
-          const { image } = await api<{ image: string }>("/api/poster", { prompt, orientation, quality });
-          update = { src: image };
-        } catch (e) {
-          update = { error: (e as Error).message };
-        }
-        setPosters((all) => all.map((p) => (p.id === poster.id ? { ...p, ...update } : p)));
-      }),
-    );
-  }
-
-  const generating = posters.some((p) => !p.src && !p.error);
-  const field = (key: keyof typeof brief) => ({
-    value: brief[key],
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setBrief({ ...brief, [key]: e.target.value }),
-  });
 
   return (
-    <main className="wrap">
-      <header className="top">
-        <h1>
-          Poster <span>Studio</span>
-        </h1>
-        <p>Pick an expert → get a detailed prompt → generate posters.</p>
+    <main>
+      <header className="topbar">
+        <div className="wrap topbar-inner">
+          <div className="logo">
+            Poster<span>Studio</span>
+            <small>your creative agency</small>
+          </div>
+          <nav>
+            <button className={view.name !== "studio" ? "on" : ""} onClick={() => setView({ name: "brands" })} type="button">
+              Brands
+            </button>
+            <button className={view.name === "studio" ? "on" : ""} onClick={() => openStudio()} type="button">
+              Create poster
+            </button>
+          </nav>
+        </div>
       </header>
 
-      <div className="grid">
-        <section>
-          <div className="panel">
-            <h2 className="step">
-              <b>1</b> Choose your expert
-            </h2>
-            <div className="experts">
-              {EXPERTS.map((e) => (
-                <button
-                  key={e.id}
-                  className={`expert ${e.id === expertId ? "on" : ""}`}
-                  onClick={() => setExpertId(e.id)}
-                  type="button"
-                >
-                  <div className="n">
-                    {e.emoji} {e.name}
-                  </div>
-                  <div className="t">{e.tagline}</div>
-                </button>
-              ))}
-            </div>
+      <div className="wrap">
+        {!persistent && (
+          <div className="banner">
+            Brands are saved only temporarily on this server. Connect <b>Upstash Redis</b> in Vercel → Storage to keep them permanently
+            (see README).
           </div>
+        )}
 
-          <div className="panel">
-            <h2 className="step">
-              <b>2</b> Describe the poster
-            </h2>
-            <label>Headline / main text *</label>
-            <input placeholder="e.g. Summer Music Fest 2026" {...field("headline")} />
-            <label>
-              Details <small>(date, venue, offer, contact…)</small>
-            </label>
-            <textarea rows={2} placeholder="e.g. 14 June, Eco Park, Kolkata · Tickets at fest.in" {...field("details")} />
-            <label>Target audience</label>
-            <input placeholder="e.g. college students, 18–25" {...field("audience")} />
-            <label>Style / mood</label>
-            <input placeholder="e.g. retro neon, vibrant, festive" {...field("style")} />
-            <label>Brand colors</label>
-            <input placeholder="e.g. #E8552D orange and deep navy" {...field("colors")} />
-            <label>Extra notes</label>
-            <textarea rows={2} placeholder="Anything else: logo position, things to avoid…" {...field("notes")} />
-
-            <div className="row">
+        {view.name === "brands" && (
+          <>
+            <div className="page-head">
               <div>
-                <label>Format</label>
-                <select value={orientation} onChange={(e) => setOrientation(e.target.value)}>
-                  <option value="portrait">Portrait</option>
-                  <option value="square">Square</option>
-                  <option value="landscape">Landscape</option>
-                </select>
+                <h1>Client brands</h1>
+                <p className="muted">Every brand the agency knows, with its competitor study. Pick one to create posters.</p>
               </div>
-              <div>
-                <label>Quality</label>
-                <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-                  <option value="low">Low (fast)</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              <div>
-                <label>Variations</label>
-                <select value={count} onChange={(e) => setCount(Number(e.target.value))}>
-                  {[1, 2, 3, 4].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {needsPassword && (
-              <>
-                <label>Team password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => savePassword(e.target.value)}
-                  placeholder="Ask your admin"
-                />
-              </>
-            )}
-
-            <button className="btn" onClick={writePrompt} disabled={writing || !brief.headline.trim()}>
-              {writing && <span className="spin" />}
-              {writing ? "Writing prompt…" : prompt ? "Rewrite prompt" : "Write detailed prompt"}
-            </button>
-            {error && <div className="error">{error}</div>}
-          </div>
-        </section>
-
-        <section>
-          <div className="panel">
-            <h2 className="step">
-              <b>3</b> Review the prompt
-            </h2>
-            <textarea
-              className="prompt-box"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Your expert-written prompt will appear here. You can edit it before generating."
-            />
-            <div className="actions">
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={!prompt}
-                onClick={() => navigator.clipboard?.writeText(prompt)}
-              >
-                Copy prompt
+              <button className="btn" type="button" onClick={() => setView({ name: "new" })}>
+                + New brand
               </button>
             </div>
-            <button className="btn" onClick={generate} disabled={!prompt.trim() || generating}>
-              {generating && <span className="spin" />}
-              {generating ? "Generating posters…" : `Generate ${count} poster${count > 1 ? "s" : ""}`}
-            </button>
-            <p className="hint">Posters usually take 20–60 seconds. Higher quality costs more OpenAI credits.</p>
-          </div>
-
-          <div className="panel">
-            <h2 className="step">
-              <b>4</b> Your posters
-            </h2>
-            {posters.length === 0 ? (
-              <div className="empty">Generated posters will show up here.</div>
+            {!loaded ? (
+              <div className="panel empty">
+                <span className="spin" />
+              </div>
+            ) : loadError ? (
+              <div className="panel empty">
+                <div className="error">{loadError}</div>
+                <button className="btn ghost" type="button" onClick={load}>
+                  Retry
+                </button>
+              </div>
+            ) : brands.length === 0 ? (
+              <div className="panel empty">
+                <h3>No brands yet</h3>
+                <p className="muted">Add a client: details, website, social pages or screenshots, PDFs. We&apos;ll study the brand and its competitors.</p>
+                <button className="btn" type="button" onClick={() => setView({ name: "new" })}>
+                  Add your first brand
+                </button>
+              </div>
             ) : (
-              <div className="gallery">
-                {posters.map((p, i) => (
-                  <div className="card" key={p.id}>
-                    {p.src ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.src} alt={`Poster by ${p.expert}`} />
-                    ) : (
-                      <div className={`placeholder ${p.orientation}`}>
-                        {p.error ? <span className="error">{p.error}</span> : <span className="spin" />}
-                      </div>
-                    )}
-                    <div className="meta">
-                      <span>{p.expert}</span>
-                      {p.src && (
-                        <a href={p.src} download={`poster-${posters.length - i}.jpg`}>
-                          Download
-                        </a>
-                      )}
+              <div className="brand-grid">
+                {brands.map((b) => (
+                  <button key={b.id} type="button" className="brand-card" onClick={() => setView({ name: "brand", id: b.id })}>
+                    {b.logo ? <img src={b.logo} alt="" className="logo-md" /> : <div className="logo-md mono">{b.name[0]}</div>}
+                    <div>
+                      <h3>{b.name}</h3>
+                      <p className="muted small">{[b.industry || b.study?.category, b.location].filter(Boolean).join(" · ") || "—"}</p>
+                      <span className={`status ${b.study ? "ok" : ""}`}>
+                        {b.study ? `Study ready · ${b.study.competitors.length} competitors` : "No study yet"}
+                      </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
+          </>
+        )}
+
+        {view.name === "new" && (
+          <BrandForm
+            onCancel={() => setView({ name: "brands" })}
+            onDone={(b) => {
+              upsert(b);
+              setView({ name: "brand", id: b.id });
+            }}
+          />
+        )}
+
+        {view.name === "edit" && current && (
+          <BrandForm
+            initial={current}
+            onCancel={() => setView({ name: "brand", id: current.id })}
+            onDone={(b) => {
+              upsert(b);
+              setView({ name: "brand", id: b.id });
+            }}
+          />
+        )}
+
+        {view.name === "brand" && current && (
+          <>
+            <button className="link back" type="button" onClick={() => setView({ name: "brands" })}>
+              ← All brands
+            </button>
+            <BrandView
+              brand={current}
+              onChange={upsert}
+              onEdit={() => setView({ name: "edit", id: current.id })}
+              onDelete={() => {
+                setBrands((all) => all.filter((x) => x.id !== current.id));
+                setView({ name: "brands" });
+              }}
+              onCreatePoster={() => openStudio(current.id)}
+            />
+          </>
+        )}
+
+        {/* Kept mounted so work in progress survives switching tabs. */}
+        <div hidden={view.name !== "studio"}>
+          <div className="page-head">
+            <div>
+              <h1>Create poster</h1>
+              <p className="muted">Brief → positioning → team → 3 ideas → 3 shoots → posters.</p>
+            </div>
           </div>
-        </section>
+          <Studio
+            brands={brands}
+            brandId={studioBrandId}
+            setBrandId={setStudioBrandId}
+            onNewBrand={() => setView({ name: "new" })}
+          />
+        </div>
       </div>
+
+      {askPassword && (
+        <div className="modal-bg">
+          <form
+            className="modal"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setPassword(pw);
+              setAskPassword(false);
+              load();
+            }}
+          >
+            <h3>Team password</h3>
+            <p className="muted small">Ask your admin for the Poster Studio password.</p>
+            <input type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
+            <button className="btn" type="submit">
+              Continue
+            </button>
+          </form>
+        </div>
+      )}
     </main>
   );
 }
