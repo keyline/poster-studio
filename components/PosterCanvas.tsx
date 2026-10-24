@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { canvasToJpeg, loadImage, saveBlob } from "@/lib/client";
+import { areaLuminance, blendShare, prepareLogo, tintLogo, type LogoStyle, type PreparedLogo } from "@/lib/logo";
 import type { Layout } from "@/lib/types";
 
 const FONTS = {
@@ -128,15 +129,15 @@ function drawCta(ctx: CanvasRenderingContext2D, text: string, size: number, x: n
 }
 
 // Logo with the tagline beneath; returns its size so callers can reserve room for it.
-function signOff(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, tagline: string, W: number, H: number) {
+function signOff(ctx: CanvasRenderingContext2D, logo: PreparedLogo | null, style: LogoStyle, tagline: string, W: number, H: number) {
   let lw = 0;
   let lh = 0;
   if (logo) {
     lw = W * 0.17;
-    lh = (lw * logo.naturalHeight) / logo.naturalWidth;
+    lh = (lw * logo.h) / logo.w;
     if (lh > H * 0.07) {
       lh = H * 0.07;
-      lw = (lh * logo.naturalWidth) / logo.naturalHeight;
+      lw = (lh * logo.w) / logo.h;
     }
   }
   const tSize = Math.round(W * 0.019);
@@ -147,7 +148,23 @@ function signOff(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, t
     w: Math.max(lw, tw),
     h: lh + tH,
     draw(x: number, y: number, alignRight: boolean, ink: string, shadow: boolean) {
-      if (logo) ctx.drawImage(logo, alignRight ? x - lw : x, y, lw, lh);
+      let badge = 0;
+      if (logo) {
+        const lx = alignRight ? x - lw : x;
+        // Auto: keep the logo as-is when it stands out from what is behind it, otherwise put it on a badge.
+        const behind = areaLuminance(ctx, lx, y, lw, lh);
+        const mode = style === "auto" ? (blendShare(logo, behind) <= 0.12 ? "original" : "badge") : style;
+        if (mode === "badge") {
+          const bp = (badge = lh * 0.3);
+          // Pick whichever badge colour the logo stands out on more.
+          ctx.fillStyle = blendShare(logo, 1) <= blendShare(logo, 0.08) ? "#ffffff" : "#16140f";
+          ctx.beginPath();
+          ctx.roundRect(lx - bp, y - bp, lw + bp * 2, lh + bp * 2, bp * 0.7);
+          ctx.fill();
+        }
+        const art = mode === "white" ? tintLogo(logo, "#ffffff") : mode === "black" ? tintLogo(logo, "#141414") : logo.canvas;
+        ctx.drawImage(art, lx, y, lw, lh);
+      }
       if (!tagline) return;
       ctx.font = `500 ${tSize}px ${BODY_FONT}`;
       ctx.textAlign = alignRight ? "right" : "left";
@@ -157,7 +174,7 @@ function signOff(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, t
         ctx.shadowColor = ink === "#ffffff" ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)";
         ctx.shadowBlur = tSize * 0.6;
       }
-      ctx.fillText(tagline, x, y + lh + tSize * 0.4);
+      ctx.fillText(tagline, x, y + lh + badge + tSize * 0.4);
       ctx.shadowBlur = 0;
       ctx.shadowColor = "transparent";
     },
@@ -167,17 +184,18 @@ function signOff(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, t
 // Lays out the full ad: picture, headline, subhead, body copy, CTA and logo sign-off.
 async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: Layout, showText: boolean, logoSrc?: string) {
   const [img] = await Promise.all([loadImage(src), ensureFonts()]);
-  const logo = logoSrc ? await loadImage(logoSrc).catch(() => null) : null;
+  const logoImg = logoSrc ? await loadImage(logoSrc).catch(() => null) : null;
+  const logo = logoImg && logoSrc ? prepareLogo(logoImg, logoSrc) : null;
   const W = img.naturalWidth;
   const H = img.naturalHeight;
   canvas.width = W;
   canvas.height = H;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const { position, tone, accent } = layout;
   const pad = Math.round(W * 0.07);
   const ink = tone === "light" ? "#ffffff" : "#141414";
   const tagline = showText ? copy.tagline?.trim() ?? "" : "";
-  const sign = signOff(ctx, logo, tagline, W, H);
+  const sign = signOff(ctx, logo, layout.logoStyle ?? "auto", tagline, W, H);
   const hasCopy = showText && Boolean(copy.headline || copy.subhead || copy.body || copy.cta);
 
   // Copy panel: a solid block beside or below the picture, as in a classic press ad.
@@ -267,7 +285,7 @@ export default function PosterCanvas(props: {
 
   useEffect(() => {
     if (ref.current) draw(ref.current, src, copy, layout, showText, logo).catch(() => {});
-  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, layout.logoStyle, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function download() {
     if (ref.current) canvasToJpeg(ref.current).then((b) => saveBlob(b, props.filename), () => {});

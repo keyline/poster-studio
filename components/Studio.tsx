@@ -480,6 +480,17 @@ export default function Studio({
                     <option value="panel">Copy panel</option>
                     <option value="over">Copy over image</option>
                   </select>
+                  <select
+                    value={p.layout.logoStyle ?? "auto"}
+                    title="How the logo is placed"
+                    onChange={(e) => updatePoster(i, { layout: { ...p.layout, logoStyle: e.target.value as Layout["logoStyle"] } })}
+                  >
+                    <option value="auto">Logo: auto</option>
+                    <option value="original">Logo: transparent</option>
+                    <option value="white">Logo: white</option>
+                    <option value="black">Logo: black</option>
+                    <option value="badge">Logo: on badge</option>
+                  </select>
                   <select value={p.layout.position} onChange={(e) => updatePoster(i, { layout: { ...p.layout, position: e.target.value as Layout["position"] } })}>
                     {["top", "bottom", "left", "right", "center"].map((pos) => (
                       <option key={pos} value={pos}>

@@ -70,6 +70,7 @@ export type Layout = {
   accent: string;
   font: "serif" | "sans" | "condensed";
   panel?: boolean; // copy on a solid panel beside/below the picture (default) instead of over it
+  logoStyle?: "auto" | "original" | "white" | "black" | "badge";
 };
 
 export type Visual = {
