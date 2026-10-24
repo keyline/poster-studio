@@ -78,16 +78,16 @@ export const GET = route(async () => {
   if (isPersistent) {
     try {
       const n = (await listBrands()).length;
-      checks.push({ name: "Team storage", ok: true, detail: `Upstash Redis connected, ${n} shared brand${n === 1 ? "" : "s"}.` });
+      checks.push({ name: "Team storage", ok: true, detail: `Redis connected, ${n} shared brand${n === 1 ? "" : "s"}.` });
     } catch (e) {
-      checks.push({ name: "Team storage", ok: false, detail: (e as Error).message, fix: "Reconnect Upstash for Redis in Vercel → Storage, then redeploy." });
+      checks.push({ name: "Team storage", ok: false, detail: (e as Error).message, fix: "Reconnect the Redis database in Vercel → Storage, then redeploy." });
     }
   } else {
     checks.push({
       name: "Team storage",
       ok: false,
       detail: "Not connected. Brands are saved in each person's browser only.",
-      fix: `Vercel → Storage → connect Upstash for Redis to this project, ${REDEPLOY}`,
+      fix: `Vercel → Storage → connect a Redis database (Redis or Upstash for Redis) to this project, ${REDEPLOY}`,
     });
   }
 

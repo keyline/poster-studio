@@ -41,7 +41,7 @@ Prices are third-party estimates of OpenAI's rates; check your OpenAI usage page
 2. Environment variables:
    - `OPENAI_API_KEY`: your OpenAI key (required)
    - `APP_PASSWORD`: shared team password (recommended)
-3. **Share brands with the team (optional):** by default brands are saved in each person's browser. To share one brand list with everyone, go to your Vercel project → **Storage → Create / Connect Database → Upstash for Redis** (free tier is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Redeploy. Brands already saved in a browser can then be moved to the team with the **Move them to the team** button on the Brands page.
+3. **Share brands with the team (optional):** by default brands are saved in each person's browser. To share one brand list with everyone, go to your Vercel project → **Storage → Create / Connect Database → Redis** (or Upstash for Redis; the free tier is enough) and connect it to the project. Vercel adds `REDIS_URL` (or `KV_REST_API_URL` / `KV_REST_API_TOKEN` for Upstash) automatically. Redeploy. Brands already saved in a browser can then be moved to the team with the **Move them to the team** button on the Brands page.
 4. Deploy.
 
 Notes
@@ -58,7 +58,7 @@ npm install
 npm run dev                  # http://localhost:3000
 ```
 
-Without Upstash variables, brands are saved in the browser (IndexedDB).
+Without Redis variables, brands are saved in the browser (IndexedDB).
 
 ## Configuration
 
@@ -66,7 +66,7 @@ Without Upstash variables, brands are saved in the browser (IndexedDB).
 |---|---|---|---|
 | `OPENAI_API_KEY` | yes | – | OpenAI API key |
 | `APP_PASSWORD` | recommended | none | Shared team password |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | to share brands | – | Upstash Redis (added by Vercel); otherwise brands stay in each browser |
+| `REDIS_URL`, or `KV_REST_API_URL` + `KV_REST_API_TOKEN` | to share brands | – | Redis or Upstash Redis (added by Vercel); otherwise brands stay in each browser |
 | `OPENAI_TEXT_MODEL` | no | `gpt-4.1` | Model for study, ideas and prompts |
 | `OPENAI_IMAGE_MODEL` | no | `gpt-image-1-mini` | Image model (`gpt-image-1.5`, … also priced in `lib/imageCost.ts`) |
 | `MAX_IMAGE_COST_USD` | no | `0.04` | Maximum estimated cost per image |
