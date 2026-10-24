@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
 import { AD_STYLES, DEPTH_LABELS, type AdStyle } from "@/lib/craft";
 import { forAi } from "@/lib/brandStore";
-import { api } from "@/lib/client";
+import { api, canvasToJpeg, saveBlob } from "@/lib/client";
 import { EXPERTS, ROLES, avatarUrl } from "@/lib/experts";
 import { QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "@/lib/imageCost";
 import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
@@ -119,6 +119,36 @@ export default function Studio({
   function generateAll() {
     visuals.forEach((_, i) => generate(i));
     setTimeout(() => document.getElementById("posters")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
+
+  // Finished poster canvases, so "Download all" can export exactly what is on screen.
+  const canvases = useRef<(HTMLCanvasElement | null)[]>([]);
+  const canvasSetters = useMemo(
+    () => [0, 1, 2].map((i) => (c: HTMLCanvasElement | null) => (canvases.current[i] = c)),
+    [],
+  );
+  const [downloading, setDownloading] = useState(false);
+  const fileBase = (brand?.name ?? "poster").trim().replace(/[^\w-]+/g, "-").replace(/-+/g, "-");
+
+  function postCopyText(idea?: Idea) {
+    if (!idea) return "";
+    return idea.postCopy?.trim() || [idea.headline, idea.subhead, idea.body, idea.cta].filter(Boolean).join("\n\n");
+  }
+
+  async function downloadAll() {
+    setDownloading(true);
+    try {
+      for (let i = 0; i < posters.length; i++) {
+        const canvas = canvases.current[i];
+        if (!posters[i].src || !canvas) continue;
+        saveBlob(await canvasToJpeg(canvas), `${fileBase}-ad-${i + 1}.jpg`);
+        await new Promise((r) => setTimeout(r, 400));
+        saveBlob(new Blob([postCopyText(ideas[i])], { type: "text/plain;charset=utf-8" }), `${fileBase}-ad-${i + 1}-post-copy.txt`);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    } finally {
+      setDownloading(false);
+    }
   }
 
   const editIdea = (i: number, key: keyof Idea, value: string) =>
@@ -315,6 +345,8 @@ export default function Studio({
                     <input value={idea.tagline} onChange={(e) => editIdea(i, "tagline", e.target.value)} />
                   </div>
                 </div>
+                <label>Post copy (social caption)</label>
+                <textarea rows={7} value={idea.postCopy ?? ""} onChange={(e) => editIdea(i, "postCopy", e.target.value)} />
                 <label>Visual concept</label>
                 <textarea rows={3} value={idea.visualConcept} onChange={(e) => editIdea(i, "visualConcept", e.target.value)} />
                 {idea.doubleMeaning && (
@@ -389,7 +421,13 @@ export default function Studio({
       {/* 7. Posters */}
       {posters.some((p) => p.src || p.loading || p.error) && (
         <section className="panel" id="posters">
-          <StepTitle n={7} title="Your posters" hint="Adjust the layout, then download" />
+          <div className="posters-head">
+            <StepTitle n={7} title="Your posters" hint="Adjust the layout, then download" />
+            <button className="btn" type="button" onClick={downloadAll} disabled={downloading || !posters.some((p) => p.src)}>
+              {downloading && <span className="spin" />}
+              {downloading ? "Downloading…" : `Download all (${posters.filter((p) => p.src).length} images + post copy)`}
+            </button>
+          </div>
           <div className="posters">
             {posters.map((p, i) => (
               <article className="poster-card" key={i}>
@@ -415,7 +453,8 @@ export default function Studio({
                     layout={p.layout}
                     showText={p.showText}
                     logo={brand?.logo}
-                    filename={`${brand?.name ?? "poster"}-idea-${i + 1}.jpg`.replace(/\s+/g, "-")}
+                    filename={`${fileBase}-ad-${i + 1}.jpg`}
+                    onCanvas={canvasSetters[i]}
                   />
                 ) : (
                   <div className={`placeholder ${orientation}`}>
@@ -461,6 +500,16 @@ export default function Studio({
                   <button className="btn ghost small" type="button" disabled={p.loading} onClick={() => generate(i)}>
                     {p.src ? "Reshoot" : "Shoot"}
                   </button>
+                </div>
+
+                <div className="post-copy">
+                  <div className="post-copy-head">
+                    <b>Post copy</b>
+                    <button className="link small" type="button" onClick={() => navigator.clipboard?.writeText(postCopyText(ideas[i]))}>
+                      Copy
+                    </button>
+                  </div>
+                  <textarea rows={8} value={ideas[i]?.postCopy ?? ""} onChange={(e) => editIdea(i, "postCopy", e.target.value)} />
                 </div>
               </article>
             ))}

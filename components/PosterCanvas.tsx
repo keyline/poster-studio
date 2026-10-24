@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { loadImage } from "@/lib/client";
+import { canvasToJpeg, loadImage, saveBlob } from "@/lib/client";
 import type { Layout } from "@/lib/types";
 
 const FONTS = {
@@ -199,27 +199,22 @@ export default function PosterCanvas(props: {
   showText: boolean;
   logo?: string;
   filename: string;
+  onCanvas?: (canvas: HTMLCanvasElement | null) => void; // lets the page export all posters at once
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const { src, copy, layout, showText, logo } = props;
+  const { src, copy, layout, showText, logo, onCanvas } = props;
+
+  useEffect(() => {
+    onCanvas?.(ref.current);
+    return () => onCanvas?.(null);
+  }, [onCanvas]);
 
   useEffect(() => {
     if (ref.current) draw(ref.current, src, copy, layout, showText, logo).catch(() => {});
   }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function download() {
-    ref.current?.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = props.filename;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      },
-      "image/jpeg",
-      0.95,
-    );
+    if (ref.current) canvasToJpeg(ref.current).then((b) => saveBlob(b, props.filename), () => {});
   }
 
   return (

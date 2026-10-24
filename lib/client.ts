@@ -68,3 +68,17 @@ export async function compressImage(file: File, maxSide = 1600, type = "image/jp
     URL.revokeObjectURL(url);
   }
 }
+
+export function saveBlob(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+export function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not export the poster."))), "image/jpeg", 0.95),
+  );
+}

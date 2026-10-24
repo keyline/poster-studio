@@ -14,9 +14,13 @@ const COPY_RULES = `Copy rules — it must read like a seasoned human copywriter
 - Headline max 9 words (fewer at high depth). Concrete, specific, surprising.
 - No AI clichés: unlock, unleash, elevate, discover, journey, seamless, revolutionize, game-changer, "experience the", "more than just", redefine, embrace, ultimate, "look no further".
 - No exclamation marks unless essential. Natural language for the local audience and culture.
-- Subhead max 14 words. Body copy max 25 words. CTA max 4 words. Tagline max 6 words or empty.`;
+- Subhead max 14 words. Body copy max 25 words. CTA max 4 words. Tagline max 6 words or empty.
 
-const SHAPE = `{"ideas":[{"title":"2–4 word route name","appeals":["appeal names used"],"insight":"the human truth","bigIdea":"one sentence","headline":"","subhead":"","body":"","cta":"","tagline":"","visualConcept":"what the ad shows, 2–3 sentences, in the chosen ad style","doubleMeaning":"how copy + visual create a second reading (empty if none)","rationale":"why it works vs competitors, 1–2 sentences"}]}`;
+Post copy (the caption published with the creative on Facebook / Instagram):
+- Same idea and voice as the ad, written for the feed: a scroll-stopping first line (never repeat the headline word for word), 2–4 short lines that expand the idea, one clear call to action with the key detail (offer, date, phone or website if given in the brief), then 5–8 relevant hashtags (brand, category, location).
+- 40–90 words before the hashtags. Short lines with line breaks. Max 2 emojis, only if they fit the brand. Same clichés ban as above.`;
+
+const SHAPE = `{"ideas":[{"title":"2–4 word route name","appeals":["appeal names used"],"insight":"the human truth","bigIdea":"one sentence","headline":"","subhead":"","body":"","cta":"","tagline":"","visualConcept":"what the ad shows, 2–3 sentences, in the chosen ad style","doubleMeaning":"how copy + visual create a second reading (empty if none)","postCopy":"social caption with line breaks and hashtags","rationale":"why it works vs competitors, 1–2 sentences"}]}`;
 
 export const POST = route(async (req) => {
   const { brand: rawBrand, brief, appeals, team, orientation, adStyle, depth: rawDepth } = (await req.json()) as {

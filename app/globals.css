@@ -251,3 +251,8 @@ textarea { resize: vertical; line-height: 1.5; }
 .spec { margin: 8px 0 0; font-size: 13px; }
 .spec summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 .spec p { margin: 6px 0 0; line-height: 1.5; }
+
+/* Download all + post copy */
+.posters-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.post-copy textarea { font-size: 13.5px; background: var(--field); }
+.post-copy-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 13.5px; }

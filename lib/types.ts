@@ -61,6 +61,7 @@ export type Idea = {
   rationale: string;
   doubleMeaning?: string; // the second reading of copy + visual, if any
   cdNote?: string; // what the Creative Director changed in review
+  postCopy?: string; // social media caption to publish with the creative
 };
 
 export type Layout = {
