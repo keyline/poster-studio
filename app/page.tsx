@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import BrandForm from "@/components/BrandForm";
 import BrandView from "@/components/BrandView";
+import StatusView from "@/components/StatusView";
 import Studio from "@/components/Studio";
 import { loadBrands, moveBrowserBrandsToShared, type StorageMode } from "@/lib/brandStore";
 import { api, getPassword, onAuthNeeded, setPassword } from "@/lib/client";
@@ -13,7 +14,8 @@ type View =
   | { name: "new" }
   | { name: "edit"; id: string }
   | { name: "brand"; id: string }
-  | { name: "studio" };
+  | { name: "studio" }
+  | { name: "status" };
 
 export default function Home() {
   const [view, setView] = useState<View>({ name: "brands" });
@@ -70,11 +72,14 @@ export default function Home() {
             <small>your creative agency</small>
           </div>
           <nav>
-            <button className={view.name !== "studio" ? "on" : ""} onClick={() => setView({ name: "brands" })} type="button">
+            <button className={view.name !== "studio" && view.name !== "status" ? "on" : ""} onClick={() => setView({ name: "brands" })} type="button">
               Brands
             </button>
             <button className={view.name === "studio" ? "on" : ""} onClick={() => openStudio()} type="button">
               Create poster
+            </button>
+            <button className={view.name === "status" ? "on" : ""} onClick={() => setView({ name: "status" })} type="button">
+              Status
             </button>
           </nav>
         </div>
@@ -85,7 +90,10 @@ export default function Home() {
           <div className="banner error-banner">
             <b>OpenAI is not connected.</b> In Vercel open your project → <b>Settings → Environment Variables</b>, add{" "}
             <code>OPENAI_API_KEY</code> with your key from platform.openai.com/api-keys, then <b>Deployments → ⋯ → Redeploy</b>. Until
-            then the brand study, ideas and posters cannot run.
+            then the brand study, ideas and posters cannot run.{" "}
+            <button className="link" type="button" onClick={() => setView({ name: "status" })}>
+              Open System status →
+            </button>
           </div>
         )}
         {leftInBrowser.length > 0 && (
@@ -223,6 +231,8 @@ export default function Home() {
             />
           </>
         )}
+
+        {view.name === "status" && <StatusView />}
 
         {/* Kept mounted so work in progress survives switching tabs. */}
         <div hidden={view.name !== "studio"}>
