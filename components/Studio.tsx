@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
+import { AD_STYLES, DEPTH_LABELS, type AdStyle } from "@/lib/craft";
 import { forAi } from "@/lib/brandStore";
 import { api } from "@/lib/client";
 import { EXPERTS, ROLES, avatarUrl } from "@/lib/experts";
@@ -42,6 +43,14 @@ export default function Studio({
   const effectiveQuality = quality === "auto" || (config && !allowed(config.model, orientation, quality, config.maxCost)) ? autoQuality : quality;
   const perImage = config ? estimateCost(config.model, orientation, effectiveQuality) : null;
   const [textMode, setTextMode] = useState<TextMode>("overlay");
+  const [adStyle, setAdStyle] = useState<AdStyle>("photo");
+  const [depth, setDepth] = useState(7);
+
+  function pickStyle(style: AdStyle) {
+    setAdStyle(style);
+    // Photos look most real with app typesetting; graphic and text-only ads are designed as a whole.
+    setTextMode(style === "photo" ? "overlay" : "ai");
+  }
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [visuals, setVisuals] = useState<Visual[]>([]);
@@ -62,7 +71,7 @@ export default function Studio({
     setBusy("ideas");
     setError("");
     try {
-      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation });
+      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, adStyle, depth });
       setIdeas(ideas);
       setVisuals([]);
       setPosters([]);
@@ -78,7 +87,7 @@ export default function Studio({
     setBusy("visuals");
     setError("");
     try {
-      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode });
+      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode, adStyle, depth });
       setVisuals(visuals);
       setPosters(visuals.map((v) => ({ layout: v.layout, showText: textMode === "overlay" })));
       setTimeout(() => document.getElementById("visuals")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -152,6 +161,23 @@ export default function Studio({
           onChange={(e) => setBrief(e.target.value)}
           placeholder="e.g. Durga Puja offer: 10% off on 3BHK flats at Rajarhat project, booking open till 15 Oct. Target: young families upgrading from rented homes. Mandatory: RERA no. on poster."
         />
+        <label>Ad style</label>
+        <div className="ad-styles">
+          {AD_STYLES.map((st) => (
+            <button key={st.id} type="button" className={`appeal ${adStyle === st.id ? "on" : ""}`} onClick={() => pickStyle(st.id)}>
+              <b>{st.name}</b>
+              <small>{st.hint}</small>
+            </button>
+          ))}
+        </div>
+        <label>
+          Creative depth: <b className="depth-value">{depth}</b> <span className="muted">· {DEPTH_LABELS[depth]}</span>
+        </label>
+        <input type="range" min={1} max={10} step={1} value={depth} onChange={(e) => setDepth(Number(e.target.value))} className="depth" />
+        <div className="depth-scale muted small">
+          <span>1 · Straight, clear benefit</span>
+          <span>10 · Double meaning, award-level concept</span>
+        </div>
         <div className="form-grid three">
           <div>
             <label>Format</label>
@@ -181,8 +207,8 @@ export default function Studio({
           <div>
             <label>Typography</label>
             <select value={textMode} onChange={(e) => setTextMode(e.target.value as TextMode)}>
-              <option value="overlay">Typeset by the art director (most real)</option>
-              <option value="ai">Rendered inside the AI image</option>
+              <option value="overlay">Typeset by the studio (crisp, editable)</option>
+              <option value="ai">Designed into the image (full layout)</option>
             </select>
           </div>
         </div>
@@ -291,9 +317,19 @@ export default function Studio({
                 </div>
                 <label>Visual concept</label>
                 <textarea rows={3} value={idea.visualConcept} onChange={(e) => editIdea(i, "visualConcept", e.target.value)} />
+                {idea.doubleMeaning && (
+                  <p className="insight">
+                    <b>Double meaning:</b> {idea.doubleMeaning}
+                  </p>
+                )}
                 <p className="muted small">
                   <b>Why it works:</b> {idea.rationale}
                 </p>
+                {idea.cdNote && (
+                  <p className="cd-note">
+                    <b>Creative Director:</b> {idea.cdNote}
+                  </p>
+                )}
               </article>
             ))}
           </div>
@@ -319,6 +355,13 @@ export default function Studio({
                 <span className="idea-no">For idea {i + 1}</span>
                 <h3>{v.styleName}</h3>
                 <p className="muted small">{v.styleNote}</p>
+                {v.artDirection && (
+                  <details className="spec">
+                    <summary>Art director&apos;s layout spec</summary>
+                    <p>{v.artDirection}</p>
+                  </details>
+                )}
+                <label>Image prompt</label>
                 <textarea
                   rows={12}
                   value={v.prompt}
@@ -362,7 +405,13 @@ export default function Studio({
                 {p.src ? (
                   <PosterCanvas
                     src={p.src}
-                    copy={{ headline: ideas[i]?.headline ?? "", subhead: ideas[i]?.subhead ?? "", cta: ideas[i]?.cta ?? "" }}
+                    copy={{
+                      headline: ideas[i]?.headline ?? "",
+                      subhead: ideas[i]?.subhead ?? "",
+                      body: ideas[i]?.body ?? "",
+                      cta: ideas[i]?.cta ?? "",
+                      tagline: ideas[i]?.tagline ?? "",
+                    }}
                     layout={p.layout}
                     showText={p.showText}
                     logo={brand?.logo}

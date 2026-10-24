@@ -11,7 +11,7 @@ const FONTS = {
 };
 const BODY_FONT = FONTS.sans;
 
-export type Copy = { headline: string; subhead: string; cta: string };
+export type Copy = { headline: string; subhead: string; cta: string; body?: string; tagline?: string };
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = [];
@@ -82,17 +82,23 @@ async function draw(
     const hFont = `700 ${hSize}px ${FONTS[font]}`;
     const sFont = `400 ${sSize}px ${BODY_FONT}`;
     const cFont = `600 ${cSize}px ${BODY_FONT}`;
+    const bSize = Math.round(W * 0.021);
+    const bFont = `400 ${bSize}px ${BODY_FONT}`;
 
     ctx.font = hFont;
     const hLines = wrap(ctx, headline, boxW);
     ctx.font = sFont;
     const sLines = copy.subhead ? wrap(ctx, copy.subhead, boxW) : [];
+    ctx.font = bFont;
+    const bLines = copy.body ? wrap(ctx, copy.body, Math.min(boxW, W * 0.62)) : [];
+    const bLead = bSize * 1.5;
+    const gapB = bLines.length ? sSize * 0.7 : 0;
     const hLead = hSize * (font === "condensed" ? 1.02 : 1.1);
     const sLead = sSize * 1.4;
     const gap1 = sLines.length ? hSize * 0.45 : 0;
     const ctaH = copy.cta ? cSize * 2.3 : 0;
     const gap2 = copy.cta ? sSize * 1.1 : 0;
-    const total = hLines.length * hLead + gap1 + sLines.length * sLead + gap2 + ctaH;
+    const total = hLines.length * hLead + gap1 + sLines.length * sLead + gapB + bLines.length * bLead + gap2 + ctaH;
 
     const y0 =
       position === "top" ? pad : position === "bottom" ? H - pad - total : Math.max(pad, (H - total) / 2);
@@ -125,6 +131,13 @@ async function draw(
       ctx.fillText(line, tx, y);
       y += sLead;
     }
+    y += gapB;
+    ctx.font = bFont;
+    ctx.globalAlpha = 0.85;
+    for (const line of bLines) {
+      ctx.fillText(line, tx, y);
+      y += bLead;
+    }
     ctx.globalAlpha = 1;
     y += gap2;
 
@@ -143,20 +156,38 @@ async function draw(
     }
   }
 
-  if (logo) {
-    const l = await loadImage(logo).catch(() => null);
+  // Sign-off: logo with the tagline beneath, in the corner furthest from the type.
+  const tagline = showText ? copy.tagline?.trim() : "";
+  const l = logo ? await loadImage(logo).catch(() => null) : null;
+  if (l || tagline) {
+    const m = W * 0.05;
+    const bottom = !showText || position === "top" || position === "left" || position === "right";
+    const right = !(showText && position === "right");
+    let lw = 0;
+    let lh = 0;
     if (l) {
-      let lw = W * 0.16;
-      let lh = (lw * l.naturalHeight) / l.naturalWidth;
+      lw = W * 0.16;
+      lh = (lw * l.naturalHeight) / l.naturalWidth;
       if (lh > H * 0.08) {
         lh = H * 0.08;
         lw = (lh * l.naturalWidth) / l.naturalHeight;
       }
-      const m = W * 0.05;
-      // Put the logo in the corner furthest from the type.
-      const bottom = !showText || position === "top" || position === "left" || position === "right";
-      const right = !(showText && position === "right");
-      ctx.drawImage(l, right ? W - m - lw : m, bottom ? H - m - lh : m, lw, lh);
+    }
+    const tSize = Math.round(W * 0.019);
+    const tH = tagline ? tSize * 1.6 : 0;
+    const blockH = lh + tH;
+    const top = bottom ? H - m - blockH : m;
+    if (l) ctx.drawImage(l, right ? W - m - lw : m, top, lw, lh);
+    if (tagline) {
+      ctx.font = `500 ${tSize}px ${BODY_FONT}`;
+      ctx.textAlign = right ? "right" : "left";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = tone === "light" ? "#ffffff" : "#141414";
+      ctx.shadowColor = tone === "light" ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)";
+      ctx.shadowBlur = tSize * 0.6;
+      ctx.fillText(tagline, right ? W - m : m, top + lh + tSize * 0.4);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
     }
   }
 }
@@ -174,7 +205,7 @@ export default function PosterCanvas(props: {
 
   useEffect(() => {
     if (ref.current) draw(ref.current, src, copy, layout, showText, logo).catch(() => {});
-  }, [src, copy.headline, copy.subhead, copy.cta, layout.position, layout.tone, layout.accent, layout.font, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function download() {
     ref.current?.toBlob(

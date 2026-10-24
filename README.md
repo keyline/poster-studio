@@ -3,9 +3,9 @@
 Your team's AI creative agency, following the traditional agency flow:
 
 1. **Client brands.** Add a client: details, about text, website, Facebook and Instagram (URL and/or screenshots), brochures (PDF), old ads, logo. The planning team reads everything and runs a **brand & competitor study** with live web research. Brands are stored, so the team can keep many clients.
-2. **Create poster.** Pick a brand, write the brief, choose one or more **positioning styles** (Fear, Lust, Greed, Pride, Belonging, Nostalgia…), then assemble the **creative team**: Copywriter, Creative/Art Director, Visualizer and Photographer, each with their own style.
-3. **Three ideas.** The team presents 3 different ideas with headline, subhead, body copy, CTA and visual concept. Everything is editable.
-4. **Three shoot briefs.** The art director and photographer write 3 detailed image prompts in 3 different styles, written like real photo-shoot briefs so the images don't look AI-made.
+2. **Create poster.** Pick a brand, write the brief, choose the **ad style** (text only, graphic, or realistic photo) and the **creative depth** (1 = straight and clear … 10 = double-meaning, award-level concept), choose one or more **positioning styles** (Fear, Lust, Greed, Pride, Belonging, Nostalgia…), then assemble the **creative team**: Copywriter, Creative/Art Director, Visualizer and Photographer, each with their own style.
+3. **Three ideas.** The team develops 3 different ideas (insight, headline, subhead, body copy, CTA, tagline, visual concept, double meaning), then an **Executive Creative Director reviews** them, sharpens the copy to the chosen depth and notes what changed. Everything is editable.
+4. **Three shoot briefs.** The **art director writes a print-ad layout spec** for each idea (composition, hierarchy, type, palette, sign-off), then the photographer, illustrator or typographer turns it into the final image prompt and checks it against a realism checklist, so the result reads as a designed advertisement rather than an AI picture.
 5. **Posters.** Images are generated with OpenAI's GPT Image models (default `gpt-image-1-mini`), capped at **$0.04 per image**. By default the copy and logo are **typeset by the app** with real fonts (crisp, editable, no AI lettering). Adjust position, colour and font, then download.
 
 Experts and positioning styles are plain lists in `lib/experts.ts` and `lib/appeals.ts`.

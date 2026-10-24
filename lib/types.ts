@@ -59,6 +59,8 @@ export type Idea = {
   tagline: string;
   visualConcept: string;
   rationale: string;
+  doubleMeaning?: string; // the second reading of copy + visual, if any
+  cdNote?: string; // what the Creative Director changed in review
 };
 
 export type Layout = {
@@ -71,6 +73,7 @@ export type Layout = {
 export type Visual = {
   styleName: string;
   styleNote: string;
+  artDirection: string; // the art director's layout spec the prompt was written from
   prompt: string;
   layout: Layout;
 };

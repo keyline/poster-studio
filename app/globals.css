@@ -240,3 +240,14 @@ textarea { resize: vertical; line-height: 1.5; }
 .checks li.bad .dot { background: var(--danger); }
 .checks .fix { color: var(--muted); }
 @media (max-width: 560px) { nav button { padding: 7px 10px; font-size: 13px; } }
+
+/* Ad style + depth */
+.ad-styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .ad-styles { grid-template-columns: 1fr; } }
+.depth { padding: 0; accent-color: var(--accent); background: transparent; border: 0; }
+.depth-value { color: var(--accent); font-size: 16px; }
+.depth-scale { display: flex; justify-content: space-between; gap: 12px; margin-top: 2px; }
+.cd-note { font-size: 13px; margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--soft); border-radius: 0 8px 8px 0; }
+.spec { margin: 8px 0 0; font-size: 13px; }
+.spec summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.spec p { margin: 6px 0 0; line-height: 1.5; }

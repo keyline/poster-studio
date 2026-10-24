@@ -1,26 +1,25 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
+import { AD_LAYOUT_RULES, clampDepth, depthGuide, isAdStyle, realismRules, styleGuide } from "@/lib/craft";
 import { getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
 import type { Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
 
-export const maxDuration = 120;
+// Two agency steps: art direction (layout spec), then the final image prompt.
+export const maxDuration = 300;
 
-const NOT_AI = `Rules so the result does NOT look AI-generated:
-- Write it as a brief for a real photo shoot: camera body, lens (mm), aperture, shutter, ISO or film stock, the real lighting setup and modifiers, time of day, the exact location and set dressing.
-- Real-world imperfection: natural skin texture with pores and fine lines, stray hairs, creased fabric, a little everyday clutter, dust, slight lens vignetting, subtle film grain or sensor noise, believable shadows, slightly off-centre framing, honest colour grading (no oversaturation, no HDR).
-- People: real-looking local people who fit the audience and location, ordinary body types, candid expressions — no stock-photo smiles, no posing at camera unless the idea needs it.
-- Materials and products must look physically real, with correct scale, reflections and wear.
-- Explicitly avoid: plastic or airbrushed skin, glossy CGI/3D render look, perfect symmetry, glowing rim light, fantasy or neon haze unless motivated, dreamy bokeh overload, surreal impossible backgrounds, extra fingers or warped hands, smooth gradients, "digital art" or "hyper-realistic" wording.`;
+const LAYOUT_SHAPE = `"layout":{"position":"top|bottom|left|right|center — where the headline block sits","tone":"light (white type) or dark (black type), whichever reads on that area","accent":"#hex from the brand palette","font":"serif|sans|condensed"}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, ideas, team, orientation, textMode } = (await req.json()) as {
+  const { brand: rawBrand, ideas, team, orientation, textMode, adStyle, depth: rawDepth } = (await req.json()) as {
     brand: unknown;
     ideas: Idea[];
     team: Team;
     orientation: string;
     textMode: TextMode;
+    adStyle: unknown;
+    depth: unknown;
   };
   const brand = sanitizeBrand(rawBrand);
   if (!Array.isArray(ideas) || ideas.length === 0) throw new AppError("Create the ideas first.", 400);
@@ -28,49 +27,81 @@ export const POST = route(async (req) => {
   const ph = getExpert(team?.photographer);
   const vz = getExpert(team?.visualizer);
   if (!ad || !ph || !vz) throw new AppError("Select your art director, visualizer and photographer.", 400);
+  const style = isAdStyle(adStyle) ? adStyle : "photo";
+  const depth = clampDepth(rawDepth);
+  const aiText = textMode === "ai";
 
-  const textRule =
-    textMode === "ai"
-      ? `TEXT: This is the finished ${orientation} print poster. Include the headline, subhead and CTA exactly as written, in double quotes, and specify typeface style, size, colour and exact placement like a real print ad layout. Include space for the logo but do not draw a logo. No other text.`
-      : `TEXT: Absolutely NO text, letters, numbers, logos, signage or watermarks anywhere in the image — typography will be added later by the art director. Compose the photograph so the area given in "layout.position" (about one third of the frame) is calm, uncluttered negative space where type can sit legibly.`;
+  const ideasText = ideas
+    .map(
+      (i, n) =>
+        `## Idea ${n + 1}: ${i.title}\nBig idea: ${i.bigIdea}\nHeadline: ${i.headline}\nSubhead: ${i.subhead}\nBody: ${i.body}\nCTA: ${i.cta}\nTagline: ${i.tagline}\nVisual concept: ${i.visualConcept}${i.doubleMeaning ? `\nDouble meaning: ${i.doubleMeaning}` : ""}`,
+    )
+    .join("\n\n");
+  const context = `# Brand\n${brandContext(brand)}\n\n# Approved ideas\n${ideasText}`;
 
-  const system = `You are the craft team of a traditional creative agency turning approved ideas into ${orientation} poster visuals.
-- Creative/Art Director: ${ad.name} — ${ad.style}
-- Visualizer: ${vz.name} — ${vz.style}
-- Photographer: ${ph.name} — ${ph.style}
+  // Step 1: the art director lays out each ad, like a scamp/marker visual.
+  const adSystem = `You are ${ad.name}, Creative/Art Director (${ad.style}), working with visualizer ${vz.name} (${vz.style}).
+Turn each approved idea into a precise art-direction spec for a ${orientation} print ad, as you would brief a studio before the shoot.
 
-For EACH idea write one detailed image-generation prompt (gpt-image). The three visuals must use three clearly DIFFERENT execution styles (e.g. documentary photo vs studio still life vs editorial portrait vs mixed-media) while each staying true to its idea, the brand palette and the photographer's craft.
+${styleGuide(style)}
 
-${NOT_AI}
+${depthGuide(depth)}
+
+${AD_LAYOUT_RULES}
+
+For each idea, the spec must say: the exact composition (what is where, rough % of the frame), how the visual delivers the idea${depth >= 7 ? " and its double meaning" : ""}, the typographic layout (headline position, size, typeface style, colour), where body copy and the sign-off (logo + tagline) go, the palette (hex), and the texture/finish. Use the brand's visual identity. Give the three ads three clearly different executions within the chosen ad style.
+
+Respond with ONLY a JSON object:
+{"visuals":[{"styleName":"2–4 words","styleNote":"one sentence on the execution","artDirection":"the spec, 90–150 words",${LAYOUT_SHAPE}}]}
+Return them in the same order as the ideas.`;
+
+  const specRes = await respond({ system: adSystem, content: context, json: true });
+  const specs = parseJson<{ visuals: Partial<Visual>[] }>(specRes.text).visuals ?? [];
+
+  // Step 2: the specialist writes the final image-generation prompt from the spec.
+  const maker =
+    style === "photo"
+      ? `${ph.name}, photographer (${ph.style})`
+      : style === "graphic"
+        ? "the studio's senior illustrator and finished-artist"
+        : "the studio's senior typographer and finished-artist";
+
+  const textRule = aiText
+    ? `TEXT IN THE IMAGE: this is the finished ad. Render the headline, subhead, CTA and tagline EXACTLY as written, each in double quotes, with the typeface style, size, colour and placement from the spec. Spell every word exactly; no other words, letters or numbers anywhere. Leave a clear empty area in the sign-off corner for the logo; do not draw any logo.`
+    : `NO TEXT IN THE IMAGE: absolutely no letters, words, numbers, logos, signage or watermarks — the studio typesets the copy afterwards. Keep the area named in layout.position (about a third of the frame) calm and uncluttered so type can sit on it${style === "typographic" ? "; the image is just the background surface (flat brand colour or paper texture with subtle print grain)" : ""}.`;
+
+  const promptSystem = `You are ${maker}. Write the final image-generation prompt (gpt-image) for each art-direction spec, so the output looks like a real ${style === "photo" ? "photographic" : style === "graphic" ? "graphic" : "typographic"} print advertisement made by a top agency, not like an AI picture.
+
+${styleGuide(style)}
+
+${realismRules(style)}
 
 ${textRule}
 
-Each prompt: 170–260 words, plain prose, start with the shot type and subject, then setting, composition, lighting, camera/lens/film, colour grading, texture and mood; state the ${orientation} orientation.
+Each prompt: 170–260 words of plain prose. Start with "A ${orientation} print advertisement…", then the composition, the visual, ${style === "photo" ? "lighting, camera, lens and film, " : ""}palette, typography (if any), texture and finish.
 
-Respond with ONLY a JSON object:
-{"visuals":[{"styleName":"2–4 words","styleNote":"one sentence on why this style","prompt":"...","layout":{"position":"top|bottom|left|right|center — where the type sits","tone":"light (white type) or dark (black type), whichever reads best on that area","accent":"#hex from the brand palette for the CTA","font":"serif|sans|condensed"}}]}
-Return the visuals in the same order as the ideas.`;
+Before answering, check every prompt: Is it clearly an ADVERTISEMENT with a designed layout, not just a picture? Does it follow the spec? Would an art director believe a human made it? Fix it if not.
 
-  const content = `# Brand\n${brandContext(brand)}\n\n# Approved ideas\n${ideas
-    .map(
-      (i, n) =>
-        `## Idea ${n + 1}: ${i.title}\nBig idea: ${i.bigIdea}\nHeadline: ${i.headline}\nSubhead: ${i.subhead}\nCTA: ${i.cta}\nVisual concept: ${i.visualConcept}`,
-    )
-    .join("\n\n")}`;
+Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2","prompt for ad 3"]}`;
 
-  const { text } = await respond({ system, content, json: true });
-  const raw = parseJson<{ visuals: Partial<Visual>[] }>(text).visuals ?? [];
-  const visuals: Visual[] = ideas.map((_, i) => normalizeVisual(raw[i]));
+  const specText = ideas
+    .map((i, n) => `## Ad ${n + 1} (idea: ${i.title})\nCopy: headline "${i.headline}", subhead "${i.subhead}", CTA "${i.cta}", tagline "${i.tagline}"\nSpec: ${specs[n]?.artDirection || i.visualConcept}`)
+    .join("\n\n");
+  const promptRes = await respond({ system: promptSystem, content: `# Brand\n${brandContext(brand)}\n\n# Art-direction specs\n${specText}`, json: true });
+  const prompts = parseJson<{ prompts: string[] }>(promptRes.text).prompts ?? [];
+
+  const visuals: Visual[] = ideas.map((_, i) => normalizeVisual(specs[i], prompts[i]));
   if (!visuals.some((v) => v.prompt)) throw new AppError("No prompts came back. Please try again.", 502);
   return { visuals };
 });
 
-function normalizeVisual(v: Partial<Visual> = {}): Visual {
+function normalizeVisual(v: Partial<Visual> = {}, prompt?: string): Visual {
   const l = (v.layout ?? {}) as Partial<Layout>;
   return {
     styleName: v.styleName || "Visual",
     styleNote: v.styleNote || "",
-    prompt: v.prompt || "",
+    artDirection: v.artDirection || "",
+    prompt: typeof prompt === "string" ? prompt : "",
     layout: {
       position: ["top", "bottom", "left", "right", "center"].includes(l.position as string) ? l.position! : "bottom",
       tone: l.tone === "dark" ? "dark" : "light",
