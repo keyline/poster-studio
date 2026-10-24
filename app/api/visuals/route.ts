@@ -4,7 +4,7 @@ import { AD_LAYOUT_RULES, clampDepth, depthGuide, isAdStyle, realismRules, style
 import { getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
-import type { Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
+import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
 
 // Two agency steps: art direction (layout spec), then the final image prompt.
 export const maxDuration = 300;
@@ -96,13 +96,15 @@ Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2"
         `## Ad ${n + 1} (idea: ${i.title})\n${aiText ? `Copy to render: headline "${i.headline}", subhead "${i.subhead}", CTA "${i.cta}", tagline "${i.tagline}"\n` : ""}Type zone: ${specs[n]?.layout?.position ?? "bottom"} of the frame\nSpec: ${specs[n]?.artDirection || i.visualConcept}`,
     )
     .join("\n\n");
-  const promptRes = await respond({ system: promptSystem, content: `# Brand\n${brandContext(brand)}\n\n# Art-direction specs\n${specText}`, json: true });
+  // For picture-only prompts, leave out brand names and slogans: image models turn them into lettering.
+  const promptContext = aiText ? `# Brand\n${brandContext(brand)}` : pictureContext(brand);
+  const promptRes = await respond({ system: promptSystem, content: `${promptContext}\n\n# Art-direction specs\n${specText}`, json: true });
   const prompts = parseJson<{ prompts: string[] }>(promptRes.text).prompts ?? [];
 
   const visuals: Visual[] = ideas.map((_, i) => {
     const v = normalizeVisual(specs[i], prompts[i]);
     // A hard rule in code, because image models otherwise like to add words and fake logos.
-    if (v.prompt) v.prompt += aiText ? AI_TEXT_SUFFIX : noTextSuffix(v.layout.position);
+    if (v.prompt) v.prompt = aiText ? v.prompt + AI_TEXT_SUFFIX : pictureOnly(v.prompt, brand.name, v.layout.position);
     return v;
   });
   if (!visuals.some((v) => v.prompt)) throw new AppError("No prompts came back. Please try again.", 502);
@@ -120,6 +122,34 @@ const ZONE: Record<Layout["position"], string> = {
   center: "centre",
 };
 
+function pictureContext(brand: Brand) {
+  const vi = brand.study?.visualIdentity;
+  return [
+    "# Look and setting",
+    brand.location && `Location / culture: ${brand.location}`,
+    vi?.colors.length && `Palette: ${vi.colors.join("; ")}`,
+    vi?.imagery && `Imagery style: ${vi.imagery}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+const WORDY = /\b(headlines?|sub-?heads?|taglines?|slogans?|logos?|logotypes?|typograph\w*|typefaces?|fonts?|lettering|letters?|words?|text|copy|captions?|cta|call to action|body copy|sign-?off|brand ?name|wordmark|signage|labels?|written|reads?|says?|spelled)\b/i;
+
+// Keeps only sentences about the picture itself and wraps it in the no-text rule, front and back.
+function pictureOnly(prompt: string, brandName: string, position: Layout["position"]) {
+  const escaped = brandName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const brandRe = escaped ? new RegExp(escaped, "gi") : null;
+  const kept = prompt
+    .replace(/["“”][^"“”]*["“”]/g, "")
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !WORDY.test(sentence) || /\bno (text|words|letters|lettering|logos?)\b/i.test(sentence))
+    .map((sentence) => (brandRe ? sentence.replace(brandRe, "the") : sentence))
+    .join(" ")
+    .trim();
+  return `A picture with absolutely no text, letters, numbers, logos or signage anywhere. ${kept}${noTextSuffix(position)}`;
+}
+
 function noTextSuffix(position: Layout["position"]) {
   return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later.`;
 }
@@ -136,6 +166,7 @@ function normalizeVisual(v: Partial<Visual> = {}, prompt?: string): Visual {
       tone: l.tone === "dark" ? "dark" : "light",
       accent: /^#[0-9a-f]{6}$/i.test(l.accent ?? "") ? l.accent! : "#e8552d",
       font: ["serif", "sans", "condensed"].includes(l.font as string) ? l.font! : "sans",
+      panel: true,
     },
   };
 }

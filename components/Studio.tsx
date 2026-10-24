@@ -473,6 +473,13 @@ export default function Studio({
                     <input type="checkbox" checked={p.showText} onChange={(e) => updatePoster(i, { showText: e.target.checked })} />
                     Typeset copy
                   </label>
+                  <select
+                    value={p.layout.panel === false ? "over" : "panel"}
+                    onChange={(e) => updatePoster(i, { layout: { ...p.layout, panel: e.target.value === "panel" } })}
+                  >
+                    <option value="panel">Copy panel</option>
+                    <option value="over">Copy over image</option>
+                  </select>
                   <select value={p.layout.position} onChange={(e) => updatePoster(i, { layout: { ...p.layout, position: e.target.value as Layout["position"] } })}>
                     {["top", "bottom", "left", "right", "center"].map((pos) => (
                       <option key={pos} value={pos}>

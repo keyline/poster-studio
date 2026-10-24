@@ -69,6 +69,7 @@ export type Layout = {
   tone: "light" | "dark";
   accent: string;
   font: "serif" | "sans" | "condensed";
+  panel?: boolean; // copy on a solid panel beside/below the picture (default) instead of over it
 };
 
 export type Visual = {
