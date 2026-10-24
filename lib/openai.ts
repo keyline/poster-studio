@@ -49,7 +49,9 @@ export async function respond(opts: {
   webSearch?: boolean;
 }): Promise<{ text: string; usedWebSearch: boolean }> {
   const content: Part[] =
-    typeof opts.content === "string" ? [{ type: "input_text", text: opts.content }] : opts.content;
+    typeof opts.content === "string" ? [{ type: "input_text", text: opts.content }] : [...opts.content];
+  // JSON mode requires the word "json" in the input itself, not only in the instructions.
+  if (opts.json) content.push({ type: "input_text", text: "Respond with a JSON object only." });
 
   const call = async (webSearch: boolean) =>
     fetch(`${BASE}/responses`, {
