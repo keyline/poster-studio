@@ -13,5 +13,5 @@ export const POST = route(async (req) => {
     quality?: string;
   };
   if (!prompt?.trim()) throw new AppError("Prompt is required.", 400);
-  return { image: await generateImage(prompt, orientation ?? "portrait", quality ?? "medium") };
+  return generateImage(prompt, orientation ?? "portrait", quality ?? "auto");
 });

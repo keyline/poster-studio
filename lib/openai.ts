@@ -1,3 +1,5 @@
+import { DEFAULT_IMAGE_MODEL, DEFAULT_MAX_COST, QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "./imageCost";
+
 // Thin wrapper around the OpenAI Responses API (text, images, PDFs, web search).
 
 export class AppError extends Error {
@@ -95,24 +97,46 @@ const SIZES: Record<string, string> = {
   landscape: "1536x1024",
 };
 
-export async function generateImage(prompt: string, orientation: string, quality: string): Promise<string> {
+export function imageSettings() {
+  const max = Number(process.env.MAX_IMAGE_COST_USD);
+  return {
+    model: process.env.OPENAI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL,
+    maxCost: Number.isFinite(max) && max > 0 ? max : DEFAULT_MAX_COST,
+  };
+}
+
+// The budget is enforced here, on the server: a quality that would cost more than
+// MAX_IMAGE_COST_USD is automatically lowered to the best one that fits.
+export async function generateImage(prompt: string, orientation: string, requested: string) {
+  const { model, maxCost } = imageSettings();
+  const quality =
+    QUALITIES.includes(requested as Quality) && allowed(model, orientation, requested as Quality, maxCost)
+      ? (requested as Quality)
+      : bestQualityWithin(model, orientation, maxCost);
+
   const res = await fetch(`${BASE}/images/generations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey()}` },
     body: JSON.stringify({
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+      model,
       prompt,
       size: SIZES[orientation] ?? SIZES.portrait,
-      quality: ["low", "medium", "high"].includes(quality) ? quality : "medium",
+      quality,
       n: 1,
       output_format: "jpeg",
       output_compression: 92,
     }),
   });
-  if (!res.ok) throw new AppError(await errorMessage(res), res.status === 401 ? 500 : res.status);
+  if (!res.ok) {
+    let message = await errorMessage(res);
+    if (/model|deprecat|not found|does not exist/i.test(message)) {
+      message += ` (Image model "${model}". Set OPENAI_IMAGE_MODEL in Vercel to a current OpenAI image model.)`;
+    }
+    throw new AppError(message, res.status === 401 ? 500 : res.status);
+  }
   const data = await res.json();
   const item = data.data?.[0];
   const image = item?.b64_json ? `data:image/jpeg;base64,${item.b64_json}` : item?.url;
   if (!image) throw new AppError("No image returned.", 502);
-  return image;
+  return { image, quality, estimatedCost: estimateCost(model, orientation, quality) };
 }

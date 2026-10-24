@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
 import { api } from "@/lib/client";
 import { EXPERTS, ROLES, avatarUrl } from "@/lib/experts";
+import { QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "@/lib/imageCost";
 import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
 import PosterCanvas from "./PosterCanvas";
 
-type Poster = { src?: string; loading?: boolean; error?: string; layout: Layout; showText: boolean };
+type Poster = { src?: string; loading?: boolean; error?: string; layout: Layout; showText: boolean; quality?: string; cost?: number | null };
+
+const usd = (n: number) => `$${n.toFixed(3).replace(/0$/, "")}`;
 
 const EMPTY_TEAM: Team = { copywriter: "", artDirector: "", visualizer: "", photographer: "" };
 
@@ -27,7 +30,16 @@ export default function Studio({
   const [appeals, setAppeals] = useState<string[]>([]);
   const [team, setTeam] = useState<Team>(EMPTY_TEAM);
   const [orientation, setOrientation] = useState("portrait");
-  const [quality, setQuality] = useState("high");
+  const [quality, setQuality] = useState<"auto" | Quality>("auto");
+  const [config, setConfig] = useState<{ model: string; maxCost: number } | null>(null);
+
+  useEffect(() => {
+    api<{ model: string; maxCost: number }>("/api/config").then(setConfig, () => {});
+  }, []);
+
+  const autoQuality = config ? bestQualityWithin(config.model, orientation, config.maxCost) : "low";
+  const effectiveQuality = quality === "auto" || (config && !allowed(config.model, orientation, quality, config.maxCost)) ? autoQuality : quality;
+  const perImage = config ? estimateCost(config.model, orientation, effectiveQuality) : null;
   const [textMode, setTextMode] = useState<TextMode>("overlay");
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -82,8 +94,13 @@ export default function Studio({
   async function generate(i: number) {
     updatePoster(i, { loading: true, error: undefined });
     try {
-      const { image } = await api<{ image: string }>("/api/poster", { prompt: visuals[i].prompt, orientation, quality });
-      updatePoster(i, { src: image, loading: false });
+      const res = await api<{ image: string; quality: string; estimatedCost: number | null }>("/api/poster", {
+        prompt: visuals[i].prompt,
+        orientation,
+        quality: effectiveQuality,
+      });
+      const image = res.image;
+      updatePoster(i, { src: image, loading: false, quality: res.quality, cost: res.estimatedCost });
     } catch (e) {
       updatePoster(i, { error: (e as Error).message, loading: false });
     }
@@ -145,10 +162,19 @@ export default function Studio({
           </div>
           <div>
             <label>Image quality</label>
-            <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-              <option value="high">High (best realism)</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low (quick drafts)</option>
+            <select value={quality} onChange={(e) => setQuality(e.target.value as "auto" | Quality)}>
+              <option value="auto">Best within budget ({autoQuality})</option>
+              {QUALITIES.map((q) => {
+                const cost = config ? estimateCost(config.model, orientation, q) : null;
+                const ok = config ? allowed(config.model, orientation, q, config.maxCost) : true;
+                return (
+                  <option key={q} value={q} disabled={!ok}>
+                    {q[0].toUpperCase() + q.slice(1)}
+                    {cost !== null ? ` · ~${usd(cost)}` : ""}
+                    {ok ? "" : " · over budget"}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div>
@@ -303,7 +329,16 @@ export default function Studio({
           <button className="btn big" type="button" onClick={generateAll} disabled={posters.some((p) => p.loading)}>
             {posters.some((p) => p.loading) ? "Shooting…" : posters.some((p) => p.src) ? "Reshoot all 3 posters" : "Shoot the 3 posters →"}
           </button>
-          <p className="muted small center">Each poster takes about 30–90 seconds. High quality uses more OpenAI credits.</p>
+          <p className="muted small center">
+            {config && (
+              <>
+                {config.model}, {effectiveQuality} quality ·{" "}
+                {perImage !== null ? `about ${usd(perImage)} per image, ${usd(perImage * visuals.length)} for all ${visuals.length}` : "cost unknown for this model, using low quality"}{" "}
+                · budget {usd(config.maxCost)} per image.{" "}
+              </>
+            )}
+            Each poster takes about 30–90 seconds.
+          </p>
         </section>
       )}
 
@@ -318,7 +353,10 @@ export default function Studio({
                   <b>
                     Idea {i + 1}: {ideas[i]?.title}
                   </b>
-                  <span className="muted small">{visuals[i]?.styleName}</span>
+                  <span className="muted small">
+                    {visuals[i]?.styleName}
+                    {p.quality && ` · ${p.quality} quality${p.cost != null ? ` · ~${usd(p.cost)}` : ""}`}
+                  </span>
                 </div>
                 {p.src ? (
                   <PosterCanvas
