@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
+import { forAi } from "@/lib/brandStore";
 import { api } from "@/lib/client";
 import { EXPERTS, ROLES, avatarUrl } from "@/lib/experts";
 import { QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "@/lib/imageCost";
@@ -61,7 +62,7 @@ export default function Studio({
     setBusy("ideas");
     setError("");
     try {
-      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brandId, brief, appeals, team, orientation });
+      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation });
       setIdeas(ideas);
       setVisuals([]);
       setPosters([]);
@@ -77,7 +78,7 @@ export default function Studio({
     setBusy("visuals");
     setError("");
     try {
-      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brandId, ideas, team, orientation, textMode });
+      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode });
       setVisuals(visuals);
       setPosters(visuals.map((v) => ({ layout: v.layout, showText: textMode === "overlay" })));
       setTimeout(() => document.getElementById("visuals")?.scrollIntoView({ behavior: "smooth" }), 50);

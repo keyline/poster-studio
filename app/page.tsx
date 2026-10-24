@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import BrandForm from "@/components/BrandForm";
 import BrandView from "@/components/BrandView";
 import Studio from "@/components/Studio";
+import { loadBrands, type StorageMode } from "@/lib/brandStore";
 import { api, getPassword, onAuthNeeded, setPassword } from "@/lib/client";
 import type { Brand } from "@/lib/types";
 
@@ -17,7 +18,9 @@ type View =
 export default function Home() {
   const [view, setView] = useState<View>({ name: "brands" });
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [persistent, setPersistent] = useState(true);
+  const [mode, setMode] = useState<StorageMode>("shared");
+  const [openaiReady, setOpenaiReady] = useState(true);
+  const [warning, setWarning] = useState<string>();
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [studioBrandId, setStudioBrandId] = useState("");
@@ -26,10 +29,11 @@ export default function Home() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api<{ brands: Brand[]; persistent: boolean }>("/api/brands");
+      const data = await loadBrands();
       setBrands(data.brands);
-      setPersistent(data.persistent);
+      setMode(data.mode);
       setLoadError("");
+      api<{ openaiConfigured: boolean }>("/api/config").then((c) => setOpenaiReady(c.openaiConfigured), () => {});
     } catch (e) {
       setLoadError((e as Error).message);
     } finally {
@@ -73,10 +77,17 @@ export default function Home() {
       </header>
 
       <div className="wrap">
-        {!persistent && (
+        {!openaiReady && (
+          <div className="banner error-banner">
+            <b>OpenAI is not connected.</b> In Vercel open your project → <b>Settings → Environment Variables</b>, add{" "}
+            <code>OPENAI_API_KEY</code> with your key from platform.openai.com/api-keys, then <b>Deployments → ⋯ → Redeploy</b>. Until
+            then the brand study, ideas and posters cannot run.
+          </div>
+        )}
+        {loaded && mode === "browser" && (
           <div className="banner">
-            Brands are saved only temporarily on this server. Connect <b>Upstash Redis</b> in Vercel → Storage to keep them permanently
-            (see README).
+            Brands are saved <b>in this browser</b> only. To share them with your team, connect <b>Upstash for Redis</b> in Vercel →
+            Storage, then redeploy.
           </div>
         )}
 
@@ -131,9 +142,11 @@ export default function Home() {
 
         {view.name === "new" && (
           <BrandForm
+            mode={mode}
             onCancel={() => setView({ name: "brands" })}
-            onDone={(b) => {
+            onDone={(b, w) => {
               upsert(b);
+              setWarning(w);
               setView({ name: "brand", id: b.id });
             }}
           />
@@ -141,10 +154,12 @@ export default function Home() {
 
         {view.name === "edit" && current && (
           <BrandForm
+            mode={mode}
             initial={current}
             onCancel={() => setView({ name: "brand", id: current.id })}
-            onDone={(b) => {
+            onDone={(b, w) => {
               upsert(b);
+              setWarning(w);
               setView({ name: "brand", id: b.id });
             }}
           />
@@ -156,9 +171,15 @@ export default function Home() {
               ← All brands
             </button>
             <BrandView
+              key={current.id + (warning ?? "")}
               brand={current}
+              mode={mode}
+              warning={warning}
               onChange={upsert}
-              onEdit={() => setView({ name: "edit", id: current.id })}
+              onEdit={() => {
+                setWarning(undefined);
+                setView({ name: "edit", id: current.id });
+              }}
               onDelete={() => {
                 setBrands((all) => all.filter((x) => x.id !== current.id));
                 setView({ name: "brands" });

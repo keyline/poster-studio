@@ -1,32 +1,37 @@
 "use client";
 
 import { useState } from "react";
+import { forAi, removeBrand, storeBrand, type StorageMode } from "@/lib/brandStore";
 import { api } from "@/lib/client";
-import type { Brand } from "@/lib/types";
+import type { Brand, BrandStudy } from "@/lib/types";
 
 export default function BrandView({
   brand,
+  mode,
+  warning,
   onChange,
   onEdit,
   onDelete,
   onCreatePoster,
 }: {
   brand: Brand;
+  mode: StorageMode;
+  warning?: string;
   onChange: (b: Brand) => void;
   onEdit: () => void;
   onDelete: () => void;
   onCreatePoster: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(warning ?? "");
   const s = brand.study;
 
   async function rerun() {
     setBusy(true);
     setError("");
     try {
-      const { brand: updated } = await api<{ brand: Brand }>(`/api/brands/${brand.id}/study`, {});
-      onChange(updated);
+      const { study } = await api<{ study: BrandStudy }>("/api/study", { brand: forAi(brand) });
+      onChange(await storeBrand({ ...brand, study }, mode));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -37,7 +42,7 @@ export default function BrandView({
   async function remove() {
     if (!confirm(`Delete ${brand.name}? This cannot be undone.`)) return;
     try {
-      await api(`/api/brands/${brand.id}`, undefined, "DELETE");
+      await removeBrand(brand.id, mode);
       onDelete();
     } catch (e) {
       setError((e as Error).message);

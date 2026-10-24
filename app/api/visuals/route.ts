@@ -1,8 +1,8 @@
 import { brandContext } from "@/lib/brandContext";
+import { sanitizeBrand } from "@/lib/brandInput";
 import { getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
-import { getBrand } from "@/lib/store";
 import type { Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
 
 export const maxDuration = 120;
@@ -15,15 +15,14 @@ const NOT_AI = `Rules so the result does NOT look AI-generated:
 - Explicitly avoid: plastic or airbrushed skin, glossy CGI/3D render look, perfect symmetry, glowing rim light, fantasy or neon haze unless motivated, dreamy bokeh overload, surreal impossible backgrounds, extra fingers or warped hands, smooth gradients, "digital art" or "hyper-realistic" wording.`;
 
 export const POST = route(async (req) => {
-  const { brandId, ideas, team, orientation, textMode } = (await req.json()) as {
-    brandId: string;
+  const { brand: rawBrand, ideas, team, orientation, textMode } = (await req.json()) as {
+    brand: unknown;
     ideas: Idea[];
     team: Team;
     orientation: string;
     textMode: TextMode;
   };
-  const brand = await getBrand(brandId);
-  if (!brand) throw new AppError("Brand not found.", 404);
+  const brand = sanitizeBrand(rawBrand);
   if (!Array.isArray(ideas) || ideas.length === 0) throw new AppError("Create the ideas first.", 400);
   const ad = getExpert(team?.artDirector);
   const ph = getExpert(team?.photographer);

@@ -1,23 +1,22 @@
 import { appealNames } from "@/lib/appeals";
 import { brandContext } from "@/lib/brandContext";
+import { sanitizeBrand } from "@/lib/brandInput";
 import { getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
-import { getBrand } from "@/lib/store";
 import type { Idea, Team } from "@/lib/types";
 
 export const maxDuration = 120;
 
 export const POST = route(async (req) => {
-  const { brandId, brief, appeals, team, orientation } = (await req.json()) as {
-    brandId: string;
+  const { brand: rawBrand, brief, appeals, team, orientation } = (await req.json()) as {
+    brand: unknown;
     brief: string;
     appeals: string[];
     team: Team;
     orientation: string;
   };
-  const brand = await getBrand(brandId);
-  if (!brand) throw new AppError("Brand not found.", 404);
+  const brand = sanitizeBrand(rawBrand);
   if (!brief?.trim()) throw new AppError("Write a brief first.", 400);
   const cw = getExpert(team?.copywriter);
   const ad = getExpert(team?.artDirector);

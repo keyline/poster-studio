@@ -41,8 +41,7 @@ Prices are third-party estimates of OpenAI's rates; check your OpenAI usage page
 2. Environment variables:
    - `OPENAI_API_KEY`: your OpenAI key (required)
    - `APP_PASSWORD`: shared team password (recommended)
-3. **Storage (needed to remember brands):** in your Vercel project go to **Storage → Create / Connect Database → Upstash for Redis** (free tier is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Redeploy.
-   Without it, brands are kept only temporarily and will disappear.
+3. **Share brands with the team (optional):** by default brands are saved in each person's browser. To share one brand list with everyone, go to your Vercel project → **Storage → Create / Connect Database → Upstash for Redis** (free tier is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Redeploy.
 4. Deploy.
 
 Notes
@@ -59,7 +58,7 @@ npm install
 npm run dev                  # http://localhost:3000
 ```
 
-Locally, brands are saved to `.data/brands.json` unless Upstash variables are set.
+Without Upstash variables, brands are saved in the browser (IndexedDB).
 
 ## Configuration
 
@@ -67,7 +66,7 @@ Locally, brands are saved to `.data/brands.json` unless Upstash variables are se
 |---|---|---|---|
 | `OPENAI_API_KEY` | yes | – | OpenAI API key |
 | `APP_PASSWORD` | recommended | none | Shared team password |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | for saving brands | – | Upstash Redis (added by Vercel) |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | to share brands | – | Upstash Redis (added by Vercel); otherwise brands stay in each browser |
 | `OPENAI_TEXT_MODEL` | no | `gpt-4.1` | Model for study, ideas and prompts |
 | `OPENAI_IMAGE_MODEL` | no | `gpt-image-1-mini` | Image model (`gpt-image-1.5`, … also priced in `lib/imageCost.ts`) |
 | `MAX_IMAGE_COST_USD` | no | `0.04` | Maximum estimated cost per image |

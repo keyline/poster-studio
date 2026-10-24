@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { forAi, storeBrand, type StorageMode } from "@/lib/brandStore";
 import { api, compressImage, readAsDataUrl } from "@/lib/client";
-import type { Brand, BrandInput, SourceNote } from "@/lib/types";
+import type { Brand, BrandInput, BrandStudy, SourceNote } from "@/lib/types";
 
 type Upload = { file: File; label: string; kind: "image" | "pdf" };
 type Step = { label: string; status: "waiting" | "running" | "done" | "error"; detail?: string };
@@ -23,11 +24,13 @@ const EMPTY: BrandInput = {
 
 export default function BrandForm({
   initial,
+  mode,
   onDone,
   onCancel,
 }: {
   initial?: Brand;
-  onDone: (brand: Brand) => void;
+  mode: StorageMode;
+  onDone: (brand: Brand, warning?: string) => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState<BrandInput>(() => (initial ? { ...EMPTY, ...initial } : EMPTY));
@@ -59,7 +62,7 @@ export default function BrandForm({
 
   async function pickLogo(list: FileList | null) {
     const file = list?.[0];
-    if (file) setLogo(await compressImage(file, 500, "image/png"));
+    if (file) setLogo(await compressImage(file, 400, "image/png"));
   }
 
   async function submit() {
@@ -78,55 +81,57 @@ export default function BrandForm({
     const mark = (i: number, status: Step["status"], detail?: string) =>
       setSteps((s) => s.map((st, n) => (n === i ? { ...st, status, detail } : st)));
 
+    // Save first, so the brand is kept even if a later step fails.
+    const now = new Date().toISOString();
+    let brand: Brand = {
+      ...(initial ?? { id: crypto.randomUUID(), createdAt: now, study: undefined }),
+      ...form,
+      name: form.name.trim(),
+      logo,
+      notes,
+      updatedAt: now,
+    } as Brand;
+
     try {
       mark(0, "running");
-      const details = { ...form, logo: logo ?? null, details: true };
-      let { brand } = initial
-        ? await api<{ brand: Brand }>(`/api/brands/${initial.id}`, details, "PUT")
-        : await api<{ brand: Brand }>("/api/brands", { ...form, logo });
+      brand = await storeBrand(brand, mode);
       mark(0, "done");
-
-      const newNotes: SourceNote[] = [];
-      for (let i = 0; i < uploads.length; i++) {
-        const u = uploads[i];
-        mark(i + 1, "running");
-        try {
-          const dataUrl = u.kind === "pdf" ? await readAsDataUrl(u.file) : await compressImage(u.file);
-          const { text } = await api<{ text: string }>("/api/extract", {
-            kind: u.kind,
-            label: u.label,
-            dataUrl,
-            filename: u.file.name,
-          });
-          newNotes.push({ id: crypto.randomUUID(), label: `${u.label}: ${u.file.name}`, text });
-          mark(i + 1, "done");
-        } catch (e) {
-          mark(i + 1, "error", (e as Error).message);
-        }
-      }
-      const allNotes = [...notes, ...newNotes];
-      if (newNotes.length || allNotes.length !== (initial?.notes.length ?? 0)) {
-        ({ brand } = await api<{ brand: Brand }>(`/api/brands/${brand.id}`, { notes: allNotes }, "PUT"));
-      }
-
-      if (runStudy) {
-        const s = plan.length - 1;
-        mark(s, "running");
-        try {
-          ({ brand } = await api<{ brand: Brand }>(`/api/brands/${brand.id}/study`, {}));
-          mark(s, "done");
-        } catch (e) {
-          mark(s, "error", (e as Error).message);
-          setError("Brand saved, but the study failed. You can re-run it from the brand page.");
-          setBusy(false);
-          return;
-        }
-      }
-      onDone(brand);
     } catch (e) {
-      setError((e as Error).message);
+      mark(0, "error", (e as Error).message);
+      setError(`Could not save the brand: ${(e as Error).message}`);
       setBusy(false);
+      return;
     }
+
+    const newNotes: SourceNote[] = [];
+    for (let i = 0; i < uploads.length; i++) {
+      const u = uploads[i];
+      mark(i + 1, "running");
+      try {
+        const dataUrl = u.kind === "pdf" ? await readAsDataUrl(u.file) : await compressImage(u.file);
+        const { text } = await api<{ text: string }>("/api/extract", { kind: u.kind, label: u.label, dataUrl, filename: u.file.name });
+        newNotes.push({ id: crypto.randomUUID(), label: `${u.label}: ${u.file.name}`, text });
+        mark(i + 1, "done");
+      } catch (e) {
+        mark(i + 1, "error", (e as Error).message);
+      }
+    }
+    if (newNotes.length) brand = await storeBrand({ ...brand, notes: [...notes, ...newNotes] }, mode).catch(() => brand);
+
+    let warning: string | undefined;
+    if (runStudy) {
+      const s = plan.length - 1;
+      mark(s, "running");
+      try {
+        const { study } = await api<{ study: BrandStudy }>("/api/study", { brand: forAi(brand) });
+        brand = await storeBrand({ ...brand, study }, mode);
+        mark(s, "done");
+      } catch (e) {
+        mark(s, "error", (e as Error).message);
+        warning = `Brand saved, but the study failed: ${(e as Error).message}`;
+      }
+    }
+    onDone(brand, warning);
   }
 
   return (

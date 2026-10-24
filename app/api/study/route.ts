@@ -1,10 +1,8 @@
 import { normalizeStudy } from "@/lib/brandContext";
-import { AppError, parseJson, respond } from "@/lib/openai";
+import { sanitizeBrand } from "@/lib/brandInput";
+import { parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
-import { getBrand, saveBrand } from "@/lib/store";
 import { fetchPage } from "@/lib/web";
-
-type Ctx = { params: Promise<{ id: string }> };
 
 // Research with web search can take a couple of minutes.
 export const maxDuration = 300;
@@ -31,9 +29,8 @@ Respond with ONLY a JSON object (no markdown fences) of this exact shape:
   "sources": ["URLs or materials used"]
 }`;
 
-export const POST = route(async (_req, ctx: Ctx) => {
-  const brand = await getBrand((await ctx.params).id);
-  if (!brand) throw new AppError("Brand not found.", 404);
+export const POST = route(async (req) => {
+  const brand = sanitizeBrand(((await req.json()) as { brand: unknown }).brand);
 
   const fetched: string[] = [];
   const tryFetch = async (label: string, url: string, max: number) => {
@@ -68,6 +65,5 @@ export const POST = route(async (_req, ctx: Ctx) => {
     .join("\n\n");
 
   const { text, usedWebSearch } = await respond({ system: SYSTEM, content: material, webSearch: true });
-  brand.study = normalizeStudy(parseJson(text), usedWebSearch);
-  return { brand: await saveBrand(brand) };
+  return { study: normalizeStudy(parseJson(text), usedWebSearch) };
 });

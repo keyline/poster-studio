@@ -36,7 +36,7 @@ const arr = (v: unknown): string[] =>
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
 
 // Makes the AI's JSON safe to render even if fields are missing or mistyped.
-export function normalizeStudy(raw: Record<string, unknown>, usedWebSearch: boolean): BrandStudy {
+export function normalizeStudy(raw: Record<string, unknown>, usedWebSearch: boolean, generatedAt?: string): BrandStudy {
   const vi = (raw.visualIdentity ?? {}) as Record<string, unknown>;
   const comps = Array.isArray(raw.competitors) ? (raw.competitors as Record<string, unknown>[]) : [];
   return {
@@ -60,6 +60,6 @@ export function normalizeStudy(raw: Record<string, unknown>, usedWebSearch: bool
     donts: arr(raw.donts),
     sources: arr(raw.sources),
     usedWebSearch,
-    generatedAt: new Date().toISOString(),
+    generatedAt: generatedAt || new Date().toISOString(),
   };
 }
