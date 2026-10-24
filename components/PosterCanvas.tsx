@@ -71,8 +71,8 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, box: Bo
 // Headline, subhead and body copy as wrapped lines with their sizes.
 function textBlock(ctx: CanvasRenderingContext2D, copy: Copy, layout: Layout, W: number, boxW: number, scale: number) {
   const hSize = Math.round(W * 0.078 * scale);
-  const sSize = Math.round(W * 0.03 * scale);
-  const bSize = Math.round(W * 0.024 * scale);
+  const sSize = Math.round(W * 0.034 * scale);
+  const bSize = Math.round(W * 0.028 * scale);
   const headline = layout.font === "condensed" ? copy.headline.toUpperCase() : copy.headline;
   const hFont = `700 ${hSize}px ${FONTS[layout.font]}`;
   const sFont = `500 ${sSize}px ${BODY_FONT}`;
@@ -93,7 +93,7 @@ function textBlock(ctx: CanvasRenderingContext2D, copy: Copy, layout: Layout, W:
     add(copy.body, bFont, bSize * 1.5, 0.85, Math.min(boxW, W * 0.7));
   }
   const height = lines.reduce((h, l, i) => h + (gaps[i] ?? 0) + l.lead, 0);
-  return { lines, gaps, height, ctaSize: Math.round(W * 0.026 * scale) };
+  return { lines, gaps, height, ctaSize: Math.round(W * 0.03 * scale) };
 }
 
 function drawBlock(ctx: CanvasRenderingContext2D, block: ReturnType<typeof textBlock>, x: number, y: number, ink: string, center: boolean) {
@@ -140,7 +140,7 @@ function signOff(ctx: CanvasRenderingContext2D, logo: PreparedLogo | null, style
       lw = (lh * logo.w) / logo.h;
     }
   }
-  const tSize = Math.round(W * 0.019);
+  const tSize = Math.round(W * 0.022);
   ctx.font = `500 ${tSize}px ${BODY_FONT}`;
   const tw = tagline ? ctx.measureText(tagline).width : 0;
   const tH = tagline ? tSize * 1.6 : 0;
@@ -181,6 +181,20 @@ function signOff(ctx: CanvasRenderingContext2D, logo: PreparedLogo | null, style
   };
 }
 
+// Brightness (mean) and busyness (spread) of an area of the canvas.
+function areaStats(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const sx = Math.max(0, Math.floor(x));
+  const sy = Math.max(0, Math.floor(y));
+  const sw = Math.max(1, Math.min(ctx.canvas.width - sx, Math.ceil(w)));
+  const sh = Math.max(1, Math.min(ctx.canvas.height - sy, Math.ceil(h)));
+  const px = ctx.getImageData(sx, sy, sw, sh).data;
+  const values: number[] = [];
+  for (let i = 0; i < px.length; i += 32) values.push((0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255);
+  const mean = values.reduce((a, b) => a + b, 0) / (values.length || 1);
+  const spread = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / (values.length || 1));
+  return { mean, spread };
+}
+
 // Lays out the full ad: picture, headline, subhead, body copy, CTA and logo sign-off.
 async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: Layout, showText: boolean, logoSrc?: string) {
   const [img] = await Promise.all([loadImage(src), ensureFonts()]);
@@ -193,22 +207,24 @@ async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: 
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   const { position, tone, accent } = layout;
   const pad = Math.round(W * 0.07);
-  const ink = tone === "light" ? "#ffffff" : "#141414";
+  const WHITE = "#ffffff";
+  const BLACK = "#141414";
   const tagline = showText ? copy.tagline?.trim() ?? "" : "";
   const sign = signOff(ctx, logo, layout.logoStyle ?? "auto", tagline, W, H);
   const hasCopy = showText && Boolean(copy.headline || copy.subhead || copy.body || copy.cta);
 
   // Copy panel: a solid block beside or below the picture, as in a classic press ad.
   if (hasCopy && layout.panel !== false && position !== "center") {
-    const paper = tone === "light" ? "#16140f" : "#f4efe6";
+    const paper = tone === "dark" ? "#f4efe6" : "#16140f";
+    const ink = tone === "dark" ? BLACK : WHITE;
     const side = position === "left" || position === "right";
-    const block = textBlock(ctx, copy, layout, W, side ? W * 0.42 - pad * 1.2 : W - pad * 2, side ? 0.78 : 0.9);
+    const block = textBlock(ctx, copy, layout, W, side ? W * 0.46 - pad * 1.2 : W - pad * 2, side ? 0.86 : 0.95);
     const cta = copy.cta ? ctaSize(ctx, copy.cta, block.ctaSize) : { w: 0, h: 0 };
     ctx.fillStyle = paper;
     ctx.fillRect(0, 0, W, H);
 
     if (side) {
-      const pw = W * 0.42;
+      const pw = W * 0.46;
       const px = position === "left" ? 0 : W - pw;
       drawCover(ctx, img, { x: position === "left" ? pw : 0, y: 0, w: W - pw, h: H }, position === "left" ? "right" : "left");
       const x = px + pad * 0.6;
@@ -229,29 +245,39 @@ async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: 
     return;
   }
 
-  // Copy over the picture, on a soft scrim.
+  // Copy over the picture, on a scrim when the picture behind it is busy.
   ctx.drawImage(img, 0, 0);
+  let ink = tone === "dark" ? BLACK : WHITE;
   if (hasCopy) {
     const side = position === "left" || position === "right";
     const center = position === "center";
     const boxW = side ? W * 0.5 - pad * 1.5 : W - pad * 2;
     const x0 = position === "right" ? W * 0.5 + pad * 0.5 : pad;
-    const block = textBlock(ctx, copy, layout, W, boxW, side ? 0.82 : 1);
+    const block = textBlock(ctx, copy, layout, W, boxW, side ? 0.9 : center ? 1.12 : 1);
     const cta = copy.cta ? ctaSize(ctx, copy.cta, block.ctaSize) : { w: 0, h: 0 };
     const total = block.height + (copy.cta ? block.ctaSize * 1.2 + cta.h : 0);
     const y0 = position === "top" ? pad : position === "bottom" ? H - pad - total : Math.max(pad, (H - total) / 2);
 
-    const shade = tone === "light" ? "0,0,0" : "255,255,255";
+    // Look at what is behind the text: its brightness picks the ink, its busyness decides the scrim.
+    const area = areaStats(ctx, center ? pad : x0, y0, center ? W - pad * 2 : boxW, total);
+    if (tone === "auto") ink = area.mean > 0.55 ? BLACK : WHITE;
+    const plain = area.spread < 0.07;
+    const shade = ink === WHITE ? "0,0,0" : "255,255,255";
     let g: CanvasGradient;
     if (position === "top") g = ctx.createLinearGradient(0, 0, 0, y0 + total + pad * 2);
     else if (position === "bottom") g = ctx.createLinearGradient(0, H, 0, y0 - pad * 2);
     else if (position === "left") g = ctx.createLinearGradient(0, 0, x0 + boxW + pad * 2, 0);
     else if (position === "right") g = ctx.createLinearGradient(W, 0, x0 - pad * 2, 0);
     else g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.6);
-    g.addColorStop(0, `rgba(${shade},${center ? 0.4 : 0.6})`);
+    // Full strength across the whole text block, fading out only beyond it.
+    const strength = center ? 0.5 : 0.72;
+    g.addColorStop(0, `rgba(${shade},${strength})`);
+    g.addColorStop(center ? 0.4 : 0.72, `rgba(${shade},${strength * 0.9})`);
     g.addColorStop(1, `rgba(${shade},0)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    if (!plain) {
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     const y = drawBlock(ctx, block, center ? W / 2 : x0, y0, ink, center);
     if (copy.cta) drawCta(ctx, copy.cta, block.ctaSize, center ? W / 2 - cta.w / 2 : x0, y + block.ctaSize * 1.2, accent);
@@ -262,7 +288,10 @@ async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: 
     const m = W * 0.05;
     const bottom = !hasCopy || position === "top" || position === "left" || position === "right";
     const right = !(hasCopy && position === "right");
-    sign.draw(right ? W - m : m, bottom ? H - m - sign.h : m, right, ink, true);
+    const sx = right ? W - m - sign.w : m;
+    const sy = bottom ? H - m - sign.h : m;
+    const signInk = tone === "auto" ? (areaStats(ctx, sx, sy, sign.w, sign.h).mean > 0.55 ? BLACK : WHITE) : ink;
+    sign.draw(right ? W - m : m, sy, right, signInk, true);
   }
 }
 

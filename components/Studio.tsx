@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
-import { AD_STYLES, DEPTH_LABELS, type AdStyle } from "@/lib/craft";
+import { DEPTH_LABELS } from "@/lib/craft";
 import { forAi } from "@/lib/brandStore";
 import { api, canvasToJpeg, saveBlob } from "@/lib/client";
-import { EXPERTS, ROLES, avatarUrl } from "@/lib/experts";
+import { EXPERTS, EXPERT_DETAILS, ROLES, avatarUrl } from "@/lib/experts";
 import { QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "@/lib/imageCost";
 import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
 import PosterCanvas from "./PosterCanvas";
@@ -43,12 +43,7 @@ export default function Studio({
   const effectiveQuality = quality === "auto" || (config && !allowed(config.model, orientation, quality, config.maxCost)) ? autoQuality : quality;
   const perImage = config ? estimateCost(config.model, orientation, effectiveQuality) : null;
   const [textMode, setTextMode] = useState<TextMode>("overlay");
-  const [adStyle, setAdStyle] = useState<AdStyle>("photo");
   const [depth, setDepth] = useState(7);
-
-  function pickStyle(style: AdStyle) {
-    setAdStyle(style);
-  }
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [visuals, setVisuals] = useState<Visual[]>([]);
@@ -69,7 +64,7 @@ export default function Studio({
     setBusy("ideas");
     setError("");
     try {
-      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, adStyle, depth });
+      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, depth });
       setIdeas(ideas);
       setVisuals([]);
       setPosters([]);
@@ -85,7 +80,7 @@ export default function Studio({
     setBusy("visuals");
     setError("");
     try {
-      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode, adStyle, depth });
+      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode, depth });
       setVisuals(visuals);
       setPosters(visuals.map((v) => ({ layout: v.layout, showText: textMode === "overlay" })));
       setTimeout(() => document.getElementById("visuals")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -189,15 +184,10 @@ export default function Studio({
           onChange={(e) => setBrief(e.target.value)}
           placeholder="e.g. Durga Puja offer: 10% off on 3BHK flats at Rajarhat project, booking open till 15 Oct. Target: young families upgrading from rented homes. Mandatory: RERA no. on poster."
         />
-        <label>Ad style</label>
-        <div className="ad-styles">
-          {AD_STYLES.map((st) => (
-            <button key={st.id} type="button" className={`appeal ${adStyle === st.id ? "on" : ""}`} onClick={() => pickStyle(st.id)}>
-              <b>{st.name}</b>
-              <small>{st.hint}</small>
-            </button>
-          ))}
-        </div>
+        <p className="muted small three-kinds">
+          Every run creates three creatives: <b>1 · Text only</b> (typographic), <b>2 · Graphic</b> (illustration / poster art) and{" "}
+          <b>3 · Realistic photo</b>.
+        </p>
         <label>
           Creative depth: <b className="depth-value">{depth}</b> <span className="muted">· {DEPTH_LABELS[depth]}</span>
         </label>
@@ -273,24 +263,43 @@ export default function Studio({
               <span className="muted small">{role.hint}</span>
             </div>
             <div className="profiles">
-              {EXPERTS.filter((e) => e.role === role.id).map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  className={`profile ${team[role.id] === e.id ? "on" : ""}`}
-                  onClick={() => setTeam({ ...team, [role.id]: e.id })}
-                >
-                  <span className="avatar">
-                    {e.name.split(" ").map((w) => w[0]).join("")}
-                    <img src={avatarUrl(e)} alt="" loading="lazy" onError={(ev) => (ev.currentTarget.style.display = "none")} />
-                  </span>
-                  <div>
-                    <b>{e.name}</b>
-                    <span className="title">{e.title}</span>
-                    <p>{e.brief}</p>
+              {EXPERTS.filter((e) => e.role === role.id).map((e) => {
+                const d = EXPERT_DETAILS[e.id];
+                return (
+                  <div key={e.id} className={`profile ${team[role.id] === e.id ? "on" : ""}`}>
+                    <button type="button" className="profile-pick" onClick={() => setTeam({ ...team, [role.id]: e.id })}>
+                      <span className="avatar">
+                        {e.name.split(" ").map((w) => w[0]).join("")}
+                        <img src={avatarUrl(e)} alt="" loading="lazy" onError={(ev) => (ev.currentTarget.style.display = "none")} />
+                      </span>
+                      <div>
+                        <b>{e.name}</b>
+                        <span className="title">{e.title}</span>
+                        <p>{e.brief}</p>
+                      </div>
+                    </button>
+                    {d && (
+                      <details className="profile-more">
+                        <summary>More about {e.name.split(" ")[0]}</summary>
+                        <dl>
+                          <dt>Experience</dt>
+                          <dd>{d.experience}</dd>
+                          <dt>How they work</dt>
+                          <dd>{d.approach}</dd>
+                          <dt>Signature</dt>
+                          <dd>{d.signature}</dd>
+                          <dt>Influences</dt>
+                          <dd>{d.influences}</dd>
+                          <dt>Never</dt>
+                          <dd>{d.avoids}</dd>
+                          <dt>Sample</dt>
+                          <dd>{d.sample}</dd>
+                        </dl>
+                      </details>
+                    )}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -499,6 +508,7 @@ export default function Studio({
                     ))}
                   </select>
                   <select value={p.layout.tone} onChange={(e) => updatePoster(i, { layout: { ...p.layout, tone: e.target.value as Layout["tone"] } })}>
+                    <option value="auto">Text colour: auto</option>
                     <option value="light">White text</option>
                     <option value="dark">Black text</option>
                   </select>

@@ -1,8 +1,8 @@
 import { appealNames } from "@/lib/appeals";
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { clampDepth, depthGuide, isAdStyle, styleGuide } from "@/lib/craft";
-import { getExpert } from "@/lib/experts";
+import { clampDepth, depthGuide, threeStylesGuide } from "@/lib/craft";
+import { expertProfile, getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
 import type { Idea, Team } from "@/lib/types";
@@ -26,13 +26,12 @@ Post copy (the caption published with the creative on Facebook / Instagram):
 const SHAPE = `{"ideas":[{"title":"2–4 word route name","appeals":["appeal names used"],"insight":"the human truth","bigIdea":"one sentence","headline":"","subhead":"","body":"","cta":"","tagline":"","visualConcept":"what the ad shows, 2–3 sentences, in the chosen ad style","doubleMeaning":"how copy + visual create a second reading (empty if none)","postCopy":"social caption with line breaks and hashtags","rationale":"why it works vs competitors, 1–2 sentences"}]}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, brief, appeals, team, orientation, adStyle, depth: rawDepth } = (await req.json()) as {
+  const { brand: rawBrand, brief, appeals, team, orientation, depth: rawDepth } = (await req.json()) as {
     brand: unknown;
     brief: string;
     appeals: string[];
     team: Team;
     orientation: string;
-    adStyle: unknown;
     depth: unknown;
   };
   const brand = sanitizeBrand(rawBrand);
@@ -41,23 +40,26 @@ export const POST = route(async (req) => {
   const ad = getExpert(team?.artDirector);
   const vz = getExpert(team?.visualizer);
   if (!cw || !ad || !vz) throw new AppError("Select your copywriter, art director and visualizer.", 400);
-  const style = isAdStyle(adStyle) ? adStyle : "photo";
   const depth = clampDepth(rawDepth);
 
-  const direction = `${styleGuide(style)}\n\n${depthGuide(depth)}`;
+  const direction = `THE THREE ADS — each idea is executed in a different style, in this order:\n${threeStylesGuide()}\n\n${depthGuide(depth)}`;
   const brandAndBrief = `# Brand\n${brandContext(brand)}\n\n# Poster brief\n${brief}\n\n# Positioning appeal(s)\n${appealNames(appeals ?? []).join("\n") || "Choose what fits the brief best"}`;
 
   // Step 1: the creative team develops three routes.
   const teamSystem = `You are a creative team in a traditional advertising agency, working on a ${orientation} print ad / poster.
-- Copywriter: ${cw.name} — ${cw.style}
-- Creative/Art Director: ${ad.name} — ${ad.style}
-- Visualizer: ${vz.name} — ${vz.style}
+COPYWRITER — ${expertProfile(cw)}
+
+CREATIVE / ART DIRECTOR — ${expertProfile(ad)}
+
+VISUALIZER — ${expertProfile(vz)}
+
+Each person works exactly in their own style, approach and signature described above; the copy must sound like the copywriter's examples, and the visual concepts must reflect the visualizer's and art director's signature moves.
 
 Work the way an agency does: find the insight first, then the idea, then the words and the visual together. The copywriter and visualizer are a pair: headline and visual must be conceived together, not one decorating the other.
 
 ${direction}
 
-Develop exactly 3 distinctly different ideas (different insights and routes, not variations of one line).
+Develop exactly 3 distinctly different ideas (different insights and routes, not variations of one line). Idea 1 is the text-only ad, idea 2 the graphic ad, idea 3 the realistic-photo ad: shape each idea so it works best in its style (the text-only idea must live in its words and their arrangement).
 Every idea must be driven by the selected positioning appeal(s). Use the brand study: exploit market gaps, avoid what competitors already say, follow the brand do's and don'ts.
 
 ${COPY_RULES}
@@ -74,7 +76,7 @@ ${SHAPE}`;
 
 ${direction}
 
-Judge each idea hard against: the brief; the positioning appeal(s); the creative depth target above (raise or lower the cleverness to match it exactly); the ad style; whether headline and visual truly work together; whether it could only be for THIS brand (not a competitor); clichés and AI-sounding copy; whether it reads in 3 seconds on a wall.
+Judge each idea hard against: the brief; the positioning appeal(s); the creative depth target above (raise or lower the cleverness to match it exactly); its ad style (idea 1 text only, idea 2 graphic, idea 3 realistic photo); whether headline and visual truly work together; whether it could only be for THIS brand (not a competitor); clichés and AI-sounding copy; whether it reads in 3 seconds on a wall.
 Then return the improved versions: rewrite headlines, sharpen the visual concept, cut weak words. If an idea is weak or too close to another, replace it with a stronger one. Keep the three routes clearly different.
 For each, add "cdNote": one sentence on what you changed and why.
 

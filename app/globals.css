@@ -188,9 +188,15 @@ textarea { resize: vertical; line-height: 1.5; }
 .role + .role { margin-top: 20px; }
 .role-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .role-head h4 { margin: 0; font-size: 15px; }
-.profiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; }
-.profile { display: flex; gap: 12px; text-align: left; align-items: flex-start; border: 1px solid var(--line); background: var(--field); color: inherit; font: inherit; border-radius: 12px; padding: 12px; cursor: pointer; }
+.profiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; align-items: start; }
+.profile { display: flex; flex-direction: column; border: 1px solid var(--line); background: var(--field); border-radius: 12px; padding: 12px; }
 .profile:hover { border-color: var(--muted); }
+.profile-pick { display: flex; gap: 12px; text-align: left; align-items: flex-start; border: 0; background: none; color: inherit; font: inherit; padding: 0; cursor: pointer; width: 100%; }
+.profile-more { margin-top: 8px; font-size: 12.5px; }
+.profile-more summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.profile-more dl { margin: 6px 0 0; display: grid; gap: 2px; }
+.profile-more dt { font-weight: 600; margin-top: 4px; }
+.profile-more dd { margin: 0; color: var(--muted); line-height: 1.4; }
 .avatar { position: relative; width: 54px; height: 54px; border-radius: 50%; flex: none; background: var(--line); display: grid; place-items: center; font-weight: 700; color: var(--muted); overflow: hidden; }
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .profile b { display: block; font-size: 14px; }
@@ -256,3 +262,4 @@ textarea { resize: vertical; line-height: 1.5; }
 .posters-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .post-copy textarea { font-size: 13.5px; background: var(--field); }
 .post-copy-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 13.5px; }
+.three-kinds { margin: 10px 0 0; }

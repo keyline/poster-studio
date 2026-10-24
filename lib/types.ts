@@ -66,7 +66,7 @@ export type Idea = {
 
 export type Layout = {
   position: "top" | "bottom" | "left" | "right" | "center";
-  tone: "light" | "dark";
+  tone: "light" | "dark" | "auto";
   accent: string;
   font: "serif" | "sans" | "condensed";
   panel?: boolean; // copy on a solid panel beside/below the picture (default) instead of over it

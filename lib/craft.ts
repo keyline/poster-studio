@@ -72,3 +72,14 @@ export const AD_LAYOUT_RULES = `PRINT AD LAYOUT (how real agency ads are built):
 - Strong hierarchy: headline → visual → body copy → sign-off (logo + tagline, usually bottom right or bottom centre).
 - Generous margins (at least 6% of the width) and lots of breathing room. Never fill every corner.
 - Max two typefaces. Body copy small and short.`;
+
+// Every run makes one creative of each kind, in this order.
+export const CREATIVE_STYLES: AdStyle[] = ["typographic", "graphic", "photo"];
+
+export function styleName(style: AdStyle) {
+  return AD_STYLES.find((s) => s.id === style)!.name;
+}
+
+export function threeStylesGuide(): string {
+  return CREATIVE_STYLES.map((st, i) => `Ad ${i + 1} — ${styleName(st).toUpperCase()}:\n${styleGuide(st)}`).join("\n\n");
+}
