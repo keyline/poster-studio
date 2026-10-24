@@ -29,11 +29,27 @@ async function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRe
 
 export type StorageMode = "shared" | "browser";
 
-export async function loadBrands(): Promise<{ brands: Brand[]; mode: StorageMode }> {
+async function browserBrands() {
+  const all = await tx<Brand[]>("readonly", (s) => s.getAll() as IDBRequest<Brand[]>);
+  return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+// `leftInBrowser`: brands saved in this browser before shared storage was connected.
+export async function loadBrands(): Promise<{ brands: Brand[]; mode: StorageMode; leftInBrowser: Brand[] }> {
   const { brands, persistent } = await api<{ brands: Brand[]; persistent: boolean }>("/api/brands");
-  if (persistent) return { brands, mode: "shared" };
-  const local = await tx<Brand[]>("readonly", (s) => s.getAll() as IDBRequest<Brand[]>);
-  return { brands: local.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), mode: "browser" };
+  if (!persistent) return { brands: await browserBrands(), mode: "browser", leftInBrowser: [] };
+  const leftInBrowser = await browserBrands().catch(() => [] as Brand[]);
+  return { brands, mode: "shared", leftInBrowser };
+}
+
+// Copies this browser's brands into shared storage, then removes the local copies.
+export async function moveBrowserBrandsToShared(brands: Brand[]): Promise<Brand[]> {
+  const moved: Brand[] = [];
+  for (const b of brands) {
+    moved.push((await api<{ brand: Brand }>(`/api/brands/${b.id}`, { brand: b }, "PUT")).brand);
+    await tx("readwrite", (s) => s.delete(b.id));
+  }
+  return moved;
 }
 
 export async function storeBrand(brand: Brand, mode: StorageMode): Promise<Brand> {

@@ -41,7 +41,7 @@ Prices are third-party estimates of OpenAI's rates; check your OpenAI usage page
 2. Environment variables:
    - `OPENAI_API_KEY`: your OpenAI key (required)
    - `APP_PASSWORD`: shared team password (recommended)
-3. **Share brands with the team (optional):** by default brands are saved in each person's browser. To share one brand list with everyone, go to your Vercel project → **Storage → Create / Connect Database → Upstash for Redis** (free tier is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Redeploy.
+3. **Share brands with the team (optional):** by default brands are saved in each person's browser. To share one brand list with everyone, go to your Vercel project → **Storage → Create / Connect Database → Upstash for Redis** (free tier is enough) and connect it to the project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Redeploy. Brands already saved in a browser can then be moved to the team with the **Move them to the team** button on the Brands page.
 4. Deploy.
 
 Notes

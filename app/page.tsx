@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import BrandForm from "@/components/BrandForm";
 import BrandView from "@/components/BrandView";
 import Studio from "@/components/Studio";
-import { loadBrands, type StorageMode } from "@/lib/brandStore";
+import { loadBrands, moveBrowserBrandsToShared, type StorageMode } from "@/lib/brandStore";
 import { api, getPassword, onAuthNeeded, setPassword } from "@/lib/client";
 import type { Brand } from "@/lib/types";
 
@@ -21,6 +21,9 @@ export default function Home() {
   const [mode, setMode] = useState<StorageMode>("shared");
   const [openaiReady, setOpenaiReady] = useState(true);
   const [warning, setWarning] = useState<string>();
+  const [leftInBrowser, setLeftInBrowser] = useState<Brand[]>([]);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [studioBrandId, setStudioBrandId] = useState("");
@@ -32,6 +35,7 @@ export default function Home() {
       const data = await loadBrands();
       setBrands(data.brands);
       setMode(data.mode);
+      setLeftInBrowser(data.leftInBrowser);
       setLoadError("");
       api<{ openaiConfigured: boolean }>("/api/config").then((c) => setOpenaiReady(c.openaiConfigured), () => {});
     } catch (e) {
@@ -82,6 +86,37 @@ export default function Home() {
             <b>OpenAI is not connected.</b> In Vercel open your project → <b>Settings → Environment Variables</b>, add{" "}
             <code>OPENAI_API_KEY</code> with your key from platform.openai.com/api-keys, then <b>Deployments → ⋯ → Redeploy</b>. Until
             then the brand study, ideas and posters cannot run.
+          </div>
+        )}
+        {leftInBrowser.length > 0 && (
+          <div className="banner ok-banner">
+            <span>
+              Team storage is connected. {leftInBrowser.length} brand{leftInBrowser.length > 1 ? "s are" : " is"} still saved only in
+              this browser ({leftInBrowser.map((b) => b.name).join(", ")}).
+            </span>
+            <button
+              className="btn small"
+              type="button"
+              disabled={moving}
+              onClick={async () => {
+                setMoving(true);
+                setMoveError("");
+                try {
+                  const moved = await moveBrowserBrandsToShared(leftInBrowser);
+                  setBrands((all) => [...moved, ...all.filter((b) => !moved.some((m) => m.id === b.id))]);
+                  setLeftInBrowser([]);
+                } catch (e) {
+                  setMoveError((e as Error).message);
+                  load();
+                } finally {
+                  setMoving(false);
+                }
+              }}
+            >
+              {moving && <span className="spin" />}
+              {moving ? "Moving…" : "Move them to the team"}
+            </button>
+            {moveError && <span className="error-text">{moveError}</span>}
           </div>
         )}
         {loaded && mode === "browser" && (
