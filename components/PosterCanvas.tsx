@@ -196,12 +196,15 @@ function areaStats(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 // Lays out the full ad: picture, headline, subhead, body copy, CTA and logo sign-off.
-async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: Layout, showText: boolean, logoSrc?: string) {
+async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: Layout, showText: boolean, logoSrc?: string, aspect?: number) {
   const [img] = await Promise.all([loadImage(src), ensureFonts()]);
   const logoImg = logoSrc ? await loadImage(logoSrc).catch(() => null) : null;
   const logo = logoImg && logoSrc ? prepareLogo(logoImg, logoSrc) : null;
-  const W = img.naturalWidth;
-  const H = img.naturalHeight;
+  // Output size: the chosen format (4:5 exports at exactly 1080 × 1350), otherwise the image's own size.
+  const imgAspect = img.naturalWidth / img.naturalHeight;
+  const crop = aspect && Math.abs(aspect - imgAspect) > 0.01;
+  const W = crop && aspect === 4 / 5 ? 1080 : img.naturalWidth;
+  const H = crop ? Math.round(W / aspect!) : img.naturalHeight;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
@@ -246,7 +249,7 @@ async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: 
   }
 
   // Copy over the picture, on a scrim when the picture behind it is busy.
-  ctx.drawImage(img, 0, 0);
+  drawCover(ctx, img, { x: 0, y: 0, w: W, h: H }, "center");
   let ink = tone === "dark" ? BLACK : WHITE;
   if (hasCopy) {
     const side = position === "left" || position === "right";
@@ -303,9 +306,10 @@ export default function PosterCanvas(props: {
   logo?: string;
   filename: string;
   onCanvas?: (canvas: HTMLCanvasElement | null) => void; // lets the page export all posters at once
+  aspect?: number; // width / height of the chosen format; the picture is cropped to it
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const { src, copy, layout, showText, logo, onCanvas } = props;
+  const { src, copy, layout, showText, logo, onCanvas, aspect } = props;
 
   useEffect(() => {
     onCanvas?.(ref.current);
@@ -313,8 +317,8 @@ export default function PosterCanvas(props: {
   }, [onCanvas]);
 
   useEffect(() => {
-    if (ref.current) draw(ref.current, src, copy, layout, showText, logo).catch(() => {});
-  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, layout.logoStyle, showText, logo]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (ref.current) draw(ref.current, src, copy, layout, showText, logo, aspect).catch(() => {});
+  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, layout.logoStyle, showText, logo, aspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function download() {
     if (ref.current) canvasToJpeg(ref.current).then((b) => saveBlob(b, props.filename), () => {});

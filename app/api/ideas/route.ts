@@ -1,7 +1,7 @@
 import { appealNames } from "@/lib/appeals";
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { clampDepth, depthGuide, threeStylesGuide } from "@/lib/craft";
+import { clampDepth, depthGuide, formatInfo, threeStylesGuide } from "@/lib/craft";
 import { expertProfile, getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
@@ -23,15 +23,16 @@ Post copy (the caption published with the creative on Facebook / Instagram):
 - Same idea and voice as the ad, written for the feed: a scroll-stopping first line (never repeat the headline word for word), 2–4 short lines that expand the idea, one clear call to action with the key detail (offer, date, phone or website if given in the brief), then 5–8 relevant hashtags (brand, category, location).
 - 40–90 words before the hashtags. Short lines with line breaks. Max 2 emojis, only if they fit the brand. Same clichés ban as above.`;
 
-const SHAPE = `{"ideas":[{"title":"2–4 word route name","appeals":["appeal names used"],"insight":"the human truth","bigIdea":"one sentence","headline":"","subhead":"","body":"","cta":"","tagline":"","visualConcept":"what the ad shows, 2–3 sentences, in the chosen ad style","doubleMeaning":"how copy + visual create a second reading (empty if none)","postCopy":"social caption with line breaks and hashtags","rationale":"why it works vs competitors, 1–2 sentences"}]}`;
+const SHAPE = `{"ideas":[{"title":"2–4 word route name","appeals":["appeal names used"],"insight":"the human truth","bigIdea":"one sentence","headline":"","subhead":"","body":"","cta":"","tagline":"","visualConcept":"what the ad shows, 2–3 sentences, in the chosen ad style","doubleMeaning":"how copy + visual create a second reading (empty if none)","headlineOptions":["the chosen headline","alternative 2","alternative 3"],"keyInfo":"the one essential fact line in capitals from the brief, e.g. the job position or the offer (empty if none)","postCopy":"social caption with line breaks and hashtags","rationale":"why it works vs competitors, 1–2 sentences"}]}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, brief, appeals, team, orientation, depth: rawDepth } = (await req.json()) as {
+  const { brand: rawBrand, brief, appeals, team, orientation, channel, depth: rawDepth } = (await req.json()) as {
     brand: unknown;
     brief: string;
     appeals: string[];
     team: Team;
     orientation: string;
+    channel?: string;
     depth: unknown;
   };
   const brand = sanitizeBrand(rawBrand);
@@ -41,12 +42,13 @@ export const POST = route(async (req) => {
   const vz = getExpert(team?.visualizer);
   if (!cw || !ad || !vz) throw new AppError("Select your copywriter, art director and visualizer.", 400);
   const depth = clampDepth(rawDepth);
+  const where = `${channel || "LinkedIn"}, in ${formatInfo(orientation).brief}`;
 
   const direction = `THE THREE ADS — each idea is executed in a different style, in this order:\n${threeStylesGuide()}\n\n${depthGuide(depth)}`;
   const brandAndBrief = `# Brand\n${brandContext(brand)}\n\n# Poster brief\n${brief}\n\n# Positioning appeal(s)\n${appealNames(appeals ?? []).join("\n") || "Choose what fits the brief best"}`;
 
   // Step 1: the creative team develops three routes.
-  const teamSystem = `You are a creative team in a traditional advertising agency, working on a ${orientation} print ad / poster.
+  const teamSystem = `You are a creative team in a traditional advertising agency, working on an advertisement that will run on ${where}. It must look like an iconic print advertisement, not a typical social post or template.
 COPYWRITER — ${expertProfile(cw)}
 
 CREATIVE / ART DIRECTOR — ${expertProfile(ad)}

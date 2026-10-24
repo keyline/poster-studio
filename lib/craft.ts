@@ -83,3 +83,16 @@ export function styleName(style: AdStyle) {
 export function threeStylesGuide(): string {
   return CREATIVE_STYLES.map((st, i) => `Ad ${i + 1} — ${styleName(st).toUpperCase()}:\n${styleGuide(st)}`).join("\n\n");
 }
+
+export const FORMATS: { id: string; label: string; brief: string; aspect: number }[] = [
+  { id: "feed", label: "4:5 feed (1080 × 1350)", brief: "a 4:5 vertical format, 1080 × 1350 pixels", aspect: 4 / 5 },
+  { id: "portrait", label: "Portrait poster (2:3)", brief: "a 2:3 vertical poster format", aspect: 2 / 3 },
+  { id: "square", label: "Square (1:1)", brief: "a 1:1 square format, 1080 × 1080 pixels", aspect: 1 },
+  { id: "landscape", label: "Landscape (3:2)", brief: "a 3:2 horizontal format", aspect: 3 / 2 },
+];
+
+export function formatInfo(id: string) {
+  return FORMATS.find((f) => f.id === id) ?? FORMATS[0];
+}
+
+export const CHANNELS = ["LinkedIn", "Instagram", "Facebook", "Newspaper / magazine print", "Outdoor hoarding", "WhatsApp & website"];

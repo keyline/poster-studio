@@ -95,6 +95,7 @@ export function parseJson<T>(text: string): T {
 
 const SIZES: Record<string, string> = {
   portrait: "1024x1536",
+  feed: "1024x1536", // cropped to 4:5 (1080 × 1350) when the poster is typeset
   square: "1024x1024",
   landscape: "1536x1024",
 };

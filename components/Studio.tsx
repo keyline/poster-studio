@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
-import { DEPTH_LABELS } from "@/lib/craft";
+import { CHANNELS, DEPTH_LABELS, FORMATS, formatInfo } from "@/lib/craft";
 import { forAi } from "@/lib/brandStore";
 import { api, canvasToJpeg, saveBlob } from "@/lib/client";
 import { EXPERTS, EXPERT_DETAILS, ROLES, avatarUrl } from "@/lib/experts";
@@ -31,7 +31,8 @@ export default function Studio({
   const [brief, setBrief] = useState("");
   const [appeals, setAppeals] = useState<string[]>([]);
   const [team, setTeam] = useState<Team>(EMPTY_TEAM);
-  const [orientation, setOrientation] = useState("portrait");
+  const [orientation, setOrientation] = useState("feed");
+  const [channel, setChannel] = useState(CHANNELS[0]);
   const [quality, setQuality] = useState<"auto" | Quality>("auto");
   const [config, setConfig] = useState<{ model: string; maxCost: number } | null>(null);
 
@@ -42,7 +43,7 @@ export default function Studio({
   const autoQuality = config ? bestQualityWithin(config.model, orientation, config.maxCost) : "low";
   const effectiveQuality = quality === "auto" || (config && !allowed(config.model, orientation, quality, config.maxCost)) ? autoQuality : quality;
   const perImage = config ? estimateCost(config.model, orientation, effectiveQuality) : null;
-  const [textMode, setTextMode] = useState<TextMode>("overlay");
+  const [textMode, setTextMode] = useState<TextMode>("ai");
   const [depth, setDepth] = useState(7);
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -64,7 +65,7 @@ export default function Studio({
     setBusy("ideas");
     setError("");
     try {
-      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, depth });
+      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, channel, depth });
       setIdeas(ideas);
       setVisuals([]);
       setPosters([]);
@@ -80,7 +81,7 @@ export default function Studio({
     setBusy("visuals");
     setError("");
     try {
-      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, textMode, depth });
+      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, channel, brief, textMode, depth });
       setVisuals(visuals);
       setPosters(visuals.map((v) => ({ layout: v.layout, showText: textMode === "overlay" })));
       setTimeout(() => document.getElementById("visuals")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -196,13 +197,23 @@ export default function Studio({
           <span>1 · Straight, clear benefit</span>
           <span>10 · Double meaning, award-level concept</span>
         </div>
-        <div className="form-grid three">
+        <div className="form-grid four">
           <div>
             <label>Format</label>
             <select value={orientation} onChange={(e) => setOrientation(e.target.value)}>
-              <option value="portrait">Portrait (2:3)</option>
-              <option value="square">Square (1:1)</option>
-              <option value="landscape">Landscape (3:2)</option>
+              {FORMATS.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Where will it run?</label>
+            <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+              {CHANNELS.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -225,8 +236,8 @@ export default function Studio({
           <div>
             <label>Typography</label>
             <select value={textMode} onChange={(e) => setTextMode(e.target.value as TextMode)}>
-              <option value="overlay">Typeset by the studio (recommended, exact copy)</option>
-              <option value="ai">AI draws the text (may misspell)</option>
+              <option value="ai">AI designs the complete ad (creative brief)</option>
+              <option value="overlay">Picture only + studio typesetting (exact copy)</option>
             </select>
           </div>
         </div>
@@ -352,6 +363,15 @@ export default function Studio({
                     <input value={idea.tagline} onChange={(e) => editIdea(i, "tagline", e.target.value)} />
                   </div>
                 </div>
+                <label>
+                  Key information <small>(e.g. the position or offer, shown on the ad)</small>
+                </label>
+                <input value={idea.keyInfo ?? ""} onChange={(e) => editIdea(i, "keyInfo", e.target.value)} />
+                {idea.headlineOptions && idea.headlineOptions.length > 1 && (
+                  <p className="muted small">
+                    <b>Other headlines considered:</b> {idea.headlineOptions.filter((h) => h !== idea.headline).join(" · ")}
+                  </p>
+                )}
                 <label>Post copy (social caption)</label>
                 <textarea rows={7} value={idea.postCopy ?? ""} onChange={(e) => editIdea(i, "postCopy", e.target.value)} />
                 <label>Visual concept</label>
@@ -462,6 +482,7 @@ export default function Studio({
                     logo={brand?.logo}
                     filename={`${fileBase}-ad-${i + 1}.jpg`}
                     onCanvas={canvasSetters[i]}
+                    aspect={formatInfo(orientation).aspect}
                   />
                 ) : (
                   <div className={`placeholder ${orientation}`}>

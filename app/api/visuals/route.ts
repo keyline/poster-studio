@@ -1,7 +1,8 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { AD_LAYOUT_RULES, CREATIVE_STYLES, clampDepth, depthGuide, realismRules, styleGuide, styleName, threeStylesGuide, type AdStyle } from "@/lib/craft";
-import { expertProfile, getExpert } from "@/lib/experts";
+import { AD_LAYOUT_RULES, CREATIVE_STYLES, formatInfo, clampDepth, depthGuide, realismRules, styleGuide, styleName, threeStylesGuide, type AdStyle } from "@/lib/craft";
+import { buildImageBrief, type BriefParts } from "@/lib/briefTemplate";
+import { expertProfile, getExpert, type Expert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
 import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
@@ -12,11 +13,13 @@ export const maxDuration = 300;
 const LAYOUT_SHAPE = `"layout":{"position":"top|bottom|left|right|center — where the headline block sits","tone":"light (white type) or dark (black type), whichever reads on that area","accent":"#hex from the brand palette","font":"serif|sans|condensed"}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, ideas, team, orientation, textMode, depth: rawDepth } = (await req.json()) as {
+  const { brand: rawBrand, ideas, team, orientation, channel: rawChannel, brief, textMode, depth: rawDepth } = (await req.json()) as {
     brand: unknown;
     ideas: Idea[];
     team: Team;
     orientation: string;
+    channel?: string;
+    brief?: string;
     textMode: TextMode;
     depth: unknown;
   };
@@ -24,10 +27,13 @@ export const POST = route(async (req) => {
   if (!Array.isArray(ideas) || ideas.length === 0) throw new AppError("Create the ideas first.", 400);
   const ad = getExpert(team?.artDirector);
   const ph = getExpert(team?.photographer);
+  const cw = getExpert(team?.copywriter);
   const vz = getExpert(team?.visualizer);
   if (!ad || !ph || !vz) throw new AppError("Select your art director, visualizer and photographer.", 400);
   const depth = clampDepth(rawDepth);
-  const aiText = textMode === "ai";
+  const aiText = textMode !== "overlay";
+  const channel = rawChannel || "LinkedIn";
+  const format = formatInfo(orientation);
   const styleOf = (n: number): AdStyle => CREATIVE_STYLES[n] ?? "photo";
 
   const ideasText = ideas
@@ -45,7 +51,7 @@ ${expertProfile(ad)}
 You work with the visualizer:
 ${expertProfile(vz)}
 
-Turn each approved idea into a precise art-direction spec for a ${orientation} print ad, as you would brief a studio before the shoot. Each ad has its own style:
+Turn each approved idea into a precise art-direction spec for a print ad in ${format.brief}, as you would brief a studio before the shoot. Each ad has its own style:
 
 ${threeStylesGuide()}
 
@@ -62,6 +68,11 @@ Return them in the same order as the ideas.`;
   const specRes = await respond({ system: adSystem, content: context, json: true });
   const specs = parseJson<{ visuals: Partial<Visual>[] }>(specRes.text).visuals ?? [];
 
+  let prompts: string[];
+  if (aiText) {
+    // Step 2: the Creative Director writes a full creative brief per ad; the app assembles it in the house format.
+    prompts = await writeCreativeBriefs({ brand, ideas, specs, team: { cw, ad, vz, ph }, channel, format, brief: brief ?? "", depth });
+  } else {
   // Step 2: the right specialist for each ad writes its final image-generation prompt.
   const makers: Record<AdStyle, string> = {
     typographic: "the studio's senior typographer and finished-artist (for the text-only ad)",
@@ -105,20 +116,112 @@ Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2"
   // For picture-only prompts, leave out brand names and slogans: image models turn them into lettering.
   const promptContext = aiText ? `# Brand\n${brandContext(brand)}` : pictureContext(brand);
   const promptRes = await respond({ system: promptSystem, content: `${promptContext}\n\n# Art-direction specs\n${specText}`, json: true });
-  const prompts = parseJson<{ prompts: string[] }>(promptRes.text).prompts ?? [];
+  prompts = parseJson<{ prompts: string[] }>(promptRes.text).prompts ?? [];
+  }
 
   const visuals: Visual[] = ideas.map((_, i) => {
     const v = normalizeVisual(specs[i], prompts[i], styleOf(i));
     // A hard rule in code, because image models otherwise like to add words and fake logos.
-    if (v.prompt) v.prompt = aiText ? v.prompt + AI_TEXT_SUFFIX : pictureOnly(v.prompt, brand.name, v.layout.position);
+    if (v.prompt && !aiText) v.prompt = pictureOnly(v.prompt, brand.name, v.layout.position);
     return v;
   });
   if (!visuals.some((v) => v.prompt)) throw new AppError("No prompts came back. Please try again.", 502);
   return { visuals };
 });
 
-const AI_TEXT_SUFFIX =
-  "\n\nRender only the quoted words, spelled exactly. Do not draw any logo, brand name, website or extra text; leave the sign-off corner empty for the real logo.";
+const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 70–120 words: what we see, where, how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
+
+// The Creative Director writes the content of each ad's brief; buildImageBrief puts it in the house format.
+async function writeCreativeBriefs(o: {
+  brand: Brand;
+  ideas: Idea[];
+  specs: Partial<Visual>[];
+  team: { cw?: Expert; ad: Expert; vz: Expert; ph: Expert };
+  channel: string;
+  format: ReturnType<typeof formatInfo>;
+  brief: string;
+  depth: number;
+}): Promise<string[]> {
+  const { cw, ad, vz, ph } = o.team;
+  const system = `You are a world-class advertising creative director writing the final creative brief for each of three advertisements. The brief will be handed to the studio as the production-ready visual-generation brief, so it must be specific, honest and visual.
+
+Your team (draw the CREATIVE PHILOSOPHY masters from their influences, and add Steve Jobs for simplicity if it fits):
+${[cw && `COPYWRITER — ${expertProfile(cw)}`, `ART DIRECTOR — ${expertProfile(ad)}`, `VISUALIZER — ${expertProfile(vz)}`, `PHOTOGRAPHER — ${expertProfile(ph)}`].filter(Boolean).join("\n\n")}
+
+${depthGuide(o.depth)}
+
+For each ad:
+- Ad 1 is a TEXT-ONLY typographic ad, ad 2 a GRAPHIC ad, ad 3 a REALISTIC PHOTO ad. Each ad's selectedDirection must fit its style and its approved idea and art-direction spec.
+- territories: 4 possible creative territories for the central thought; the selectedDirection is the chosen one, developed for this ad.
+- philosophy: 5–6 masters, each with the principle they bring (e.g. Steve Jobs — Simplicity, David Ogilvy — Persuasion, Bill Bernbach — Human insight, Saul Bass — Visual intelligence, Raghu Rai — Photographic authenticity, David Abbott — Restraint).
+- Be truthful: never invent salary, prices, qualifications, benefits or claims not in the client brief.
+- Write in plain, intelligent English.
+
+Respond with ONLY a JSON object: {"briefs":[${PARTS_SHAPE}, …two more]}`;
+
+  const content = `# Client
+${brandContext(o.brand)}
+
+# Client brief for this campaign
+${o.brief || "(see ideas)"}
+
+# Channel and format
+${o.channel}, ${o.format.brief}
+
+# Approved ideas and art direction
+${o.ideas
+  .map(
+    (i, n) =>
+      `## Ad ${n + 1} — ${styleName(CREATIVE_STYLES[n] ?? "photo")}: ${i.title}\nInsight: ${i.insight}\nBig idea: ${i.bigIdea}\nHeadline: ${i.headline}\nVisual concept: ${i.visualConcept}\nArt direction: ${o.specs[n]?.artDirection ?? ""}`,
+  )
+  .join("\n\n")}`;
+
+  const res = await respond({ system, content, json: true });
+  const briefs = parseJson<{ briefs: Partial<BriefParts>[] }>(res.text).briefs ?? [];
+
+  return o.ideas.map((idea, n) => {
+    const p = briefs[n] ?? {};
+    const arr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+    const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v.trim() : fallback);
+    const options = [idea.headline, ...arr(idea.headlineOptions)].filter((h, k, all) => h && all.indexOf(h) === k);
+    return buildImageBrief({
+      style: CREATIVE_STYLES[n] ?? "photo",
+      channel: o.channel,
+      formatLine: o.format.brief,
+      copy: {
+        brandName: o.brand.name,
+        headlineOptions: options,
+        headline: idea.headline,
+        supportingLine: idea.subhead,
+        keyInfo: idea.keyInfo ?? "",
+        cta: idea.cta,
+      },
+      parts: {
+        adType: str(p.adType, "Advertisement"),
+        brandDescriptor: str(p.brandDescriptor, o.brand.industry ? `a ${o.brand.industry} brand` : "a brand"),
+        objective: str(p.objective, idea.bigIdea),
+        mustNotLookLike: arr(p.mustNotLookLike),
+        insightHeadline: str(p.insightHeadline, idea.insight),
+        insightBody: str(p.insightBody),
+        insightPoints: arr(p.insightPoints),
+        challenge: str(p.challenge),
+        centralThought: str(p.centralThought, idea.bigIdea),
+        territories: Array.isArray(p.territories) ? p.territories.map((t) => ({ name: str(t?.name), description: str(t?.description) })) : [],
+        selectedDirection: str(p.selectedDirection, idea.visualConcept),
+        philosophy: Array.isArray(p.philosophy)
+          ? p.philosophy.map((m) => ({ name: str(m?.name), principle: str(m?.principle), text: str(m?.text) })).filter((m) => m.name)
+          : [],
+        visualRequirements: arr(p.visualRequirements),
+        avoid: arr(p.avoid),
+        typography: str(p.typography),
+        palette: str(p.palette),
+        composition: str(p.composition),
+        creativeTest: arr(p.creativeTest),
+        objectiveShort: str(p.objectiveShort, "makes the right people interested"),
+      },
+    });
+  });
+}
 
 const ZONE: Record<Layout["position"], string> = {
   top: "top third",

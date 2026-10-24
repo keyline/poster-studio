@@ -62,6 +62,8 @@ export type Idea = {
   doubleMeaning?: string; // the second reading of copy + visual, if any
   cdNote?: string; // what the Creative Director changed in review
   postCopy?: string; // social media caption to publish with the creative
+  headlineOptions?: string[]; // the three headlines considered, chosen one first
+  keyInfo?: string; // the one essential fact line, e.g. the position or the offer
 };
 
 export type Layout = {
