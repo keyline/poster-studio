@@ -14,7 +14,10 @@ const COPY_RULES = `Copy rules — it must read like a seasoned human copywriter
 - Headline max 9 words (fewer at high depth). Concrete, specific, surprising.
 - No AI clichés: unlock, unleash, elevate, discover, journey, seamless, revolutionize, game-changer, "experience the", "more than just", redefine, embrace, ultimate, "look no further".
 - No exclamation marks unless essential. Natural language for the local audience and culture.
-- Subhead max 14 words. Body copy max 25 words. CTA max 4 words. Tagline max 6 words or empty.
+- Every ad is a complete traditional advertisement: headline, subhead (optional, max 12 words), body copy, CTA, and the sign-off (logo + tagline).
+- Body copy is REQUIRED: 1–3 short sentences, 15–35 words, that pay off the headline and give the reason to believe plus the key facts from the brief (offer, date, place, contact).
+- CTA is REQUIRED: 2–4 words, an action (e.g. "Book a site visit", "Apply today", "Call 98300 00000").
+- Tagline max 6 words or empty.
 
 Post copy (the caption published with the creative on Facebook / Instagram):
 - Same idea and voice as the ad, written for the feed: a scroll-stopping first line (never repeat the headline word for word), 2–4 short lines that expand the idea, one clear call to action with the key detail (offer, date, phone or website if given in the brief), then 5–8 relevant hashtags (brand, category, location).

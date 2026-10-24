@@ -82,7 +82,7 @@ async function draw(
     const hFont = `700 ${hSize}px ${FONTS[font]}`;
     const sFont = `400 ${sSize}px ${BODY_FONT}`;
     const cFont = `600 ${cSize}px ${BODY_FONT}`;
-    const bSize = Math.round(W * 0.021);
+    const bSize = Math.round(W * 0.024);
     const bFont = `400 ${bSize}px ${BODY_FONT}`;
 
     ctx.font = hFont;

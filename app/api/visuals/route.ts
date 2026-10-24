@@ -68,7 +68,7 @@ Return them in the same order as the ideas.`;
 
   const textRule = aiText
     ? `TEXT IN THE IMAGE: this is the finished ad. Render the headline, subhead, CTA and tagline EXACTLY as written, each in double quotes, with the typeface style, size, colour and placement from the spec. Spell every word exactly; no other words, letters or numbers anywhere. Leave a clear empty area in the sign-off corner for the logo; do not draw any logo.`
-    : `NO TEXT IN THE IMAGE: absolutely no letters, words, numbers, logos, signage or watermarks — the studio typesets the copy afterwards. Keep the area named in layout.position (about a third of the frame) calm and uncluttered so type can sit on it${style === "typographic" ? "; the image is just the background surface (flat brand colour or paper texture with subtle print grain)" : ""}.`;
+    : `PICTURE ONLY — NO TEXT: the studio typesets the headline, body copy, CTA and logo on top afterwards with real fonts. So the spec's typography, copy and logo notes are NOT for you: ignore them and describe only the picture. Absolutely no letters, words, numbers, logos, brand names, signage, labels, screens with writing, or watermarks anywhere. Keep the zone where the type will sit calm, uncluttered and evenly toned so text reads cleanly on it${style === "typographic" ? "; for this text-only ad the picture is just the background surface: a flat brand-colour field or uncoated paper with subtle print grain and maybe one small graphic accent" : ""}.`;
 
   const promptSystem = `You are ${maker}. Write the final image-generation prompt (gpt-image) for each art-direction spec, so the output looks like a real ${style === "photo" ? "photographic" : style === "graphic" ? "graphic" : "typographic"} print advertisement made by a top agency, not like an AI picture.
 
@@ -78,22 +78,51 @@ ${realismRules(style)}
 
 ${textRule}
 
-Each prompt: 170–260 words of plain prose. Start with "A ${orientation} print advertisement…", then the composition, the visual, ${style === "photo" ? "lighting, camera, lens and film, " : ""}palette, typography (if any), texture and finish.
+${
+    aiText
+      ? `Each prompt: 170–260 words of plain prose. Start with "A ${orientation} print advertisement…", then the composition, the visual, ${style === "photo" ? "lighting, camera, lens and film, " : ""}palette, typography, texture and finish.
 
-Before answering, check every prompt: Is it clearly an ADVERTISEMENT with a designed layout, not just a picture? Does it follow the spec? Would an art director believe a human made it? Fix it if not.
+Before answering, check every prompt: Is it clearly an ADVERTISEMENT with a designed layout, not just a picture? Is every word to render spelled exactly as given, with no other text? Would an art director believe a human made it? Fix it if not.`
+      : `Each prompt: 150–230 words of plain prose. Start with "A ${orientation} ${style === "photo" ? "advertising photograph" : style === "graphic" ? "poster illustration" : "background surface"}…", then the subject, composition (state exactly which part of the frame stays empty for type), ${style === "photo" ? "lighting, camera, lens and film, " : ""}palette, texture and finish.
+
+Before answering, check every prompt: Does it mention a headline, words, typography, a logo or a brand name? Remove them. Is the empty type zone clearly described? Would an art director believe a human made it? Fix it if not.`
+  }
 
 Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2","prompt for ad 3"]}`;
 
   const specText = ideas
-    .map((i, n) => `## Ad ${n + 1} (idea: ${i.title})\nCopy: headline "${i.headline}", subhead "${i.subhead}", CTA "${i.cta}", tagline "${i.tagline}"\nSpec: ${specs[n]?.artDirection || i.visualConcept}`)
+    .map(
+      (i, n) =>
+        `## Ad ${n + 1} (idea: ${i.title})\n${aiText ? `Copy to render: headline "${i.headline}", subhead "${i.subhead}", CTA "${i.cta}", tagline "${i.tagline}"\n` : ""}Type zone: ${specs[n]?.layout?.position ?? "bottom"} of the frame\nSpec: ${specs[n]?.artDirection || i.visualConcept}`,
+    )
     .join("\n\n");
   const promptRes = await respond({ system: promptSystem, content: `# Brand\n${brandContext(brand)}\n\n# Art-direction specs\n${specText}`, json: true });
   const prompts = parseJson<{ prompts: string[] }>(promptRes.text).prompts ?? [];
 
-  const visuals: Visual[] = ideas.map((_, i) => normalizeVisual(specs[i], prompts[i]));
+  const visuals: Visual[] = ideas.map((_, i) => {
+    const v = normalizeVisual(specs[i], prompts[i]);
+    // A hard rule in code, because image models otherwise like to add words and fake logos.
+    if (v.prompt) v.prompt += aiText ? AI_TEXT_SUFFIX : noTextSuffix(v.layout.position);
+    return v;
+  });
   if (!visuals.some((v) => v.prompt)) throw new AppError("No prompts came back. Please try again.", 502);
   return { visuals };
 });
+
+const AI_TEXT_SUFFIX =
+  "\n\nRender only the quoted words, spelled exactly. Do not draw any logo, brand name, website or extra text; leave the sign-off corner empty for the real logo.";
+
+const ZONE: Record<Layout["position"], string> = {
+  top: "top third",
+  bottom: "bottom third",
+  left: "left half",
+  right: "right half",
+  center: "centre",
+};
+
+function noTextSuffix(position: Layout["position"]) {
+  return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later.`;
+}
 
 function normalizeVisual(v: Partial<Visual> = {}, prompt?: string): Visual {
   const l = (v.layout ?? {}) as Partial<Layout>;

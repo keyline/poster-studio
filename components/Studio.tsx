@@ -48,8 +48,6 @@ export default function Studio({
 
   function pickStyle(style: AdStyle) {
     setAdStyle(style);
-    // Photos look most real with app typesetting; graphic and text-only ads are designed as a whole.
-    setTextMode(style === "photo" ? "overlay" : "ai");
   }
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -237,8 +235,8 @@ export default function Studio({
           <div>
             <label>Typography</label>
             <select value={textMode} onChange={(e) => setTextMode(e.target.value as TextMode)}>
-              <option value="overlay">Typeset by the studio (crisp, editable)</option>
-              <option value="ai">Designed into the image (full layout)</option>
+              <option value="overlay">Typeset by the studio (recommended, exact copy)</option>
+              <option value="ai">AI draws the text (may misspell)</option>
             </select>
           </div>
         </div>
