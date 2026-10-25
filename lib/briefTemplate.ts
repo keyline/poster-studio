@@ -24,7 +24,29 @@ export type BriefParts = {
   composition: string;
   creativeTest: string[];
   objectiveShort: string; // "makes the right person interested in the opportunity"
+  fonts?: { headline: string; supporting: string; cta: string; reason: string }; // named typefaces for this design
 };
+
+// Fixed in every brief: what makes an ad look AI-made, and how a professional studio aligns and sets type.
+export const NO_AI_ELEMENTS = [
+  "glowing neon lines, light trails, lens flares, sparkles or magical glows",
+  "floating 3D icons, holograms, fake app screens, dashboards or UI cards",
+  "circuit-board patterns, digital particles, network dots-and-lines, binary code",
+  "robots, robot hands, cyborgs, AI brains or 'futuristic technology' clichés",
+  "glossy plastic 3D renders, clay renders, cartoon or mascot characters",
+  "generic gradient blobs, mesh gradients, bokeh-ball backgrounds",
+  "over-smoothed skin, perfect symmetry, stock-photo smiles, extra or warped fingers",
+  "gibberish letters, fake words, warped or melted typography, random symbols",
+  "surreal or impossible scenes, unless the chosen direction explicitly needs one",
+];
+
+export const ALIGNMENT_RULES = [
+  "Build the layout on a clear grid (e.g. 12 columns) with consistent outer margins of 6–8% of the width on all sides.",
+  "Align every element to a shared edge or axis: headline, supporting line, CTA and sign-off share the same left edge (or one deliberate centre axis); nothing floats.",
+  "Keep a consistent spacing rhythm: equal gaps between related elements, larger gaps between groups.",
+  "Clear hierarchy: one dominant element; the headline clearly larger than the supporting text; the CTA visibly secondary.",
+  "Keep text baselines aligned and lines straight and horizontal; no tilted, curved or randomly placed text unless the idea demands it.",
+];
 
 export type LogoUsage = {
   description: string; // what the real logo looks like (from the Creative Director looking at it)
@@ -134,7 +156,15 @@ Visual requirements:
 ${bullets(p.visualRequirements)}
 Avoid:
 ${bullets(p.avoid)}
-Typography: ${p.typography}
+Typography: ${p.typography}${
+    p.fonts?.headline
+      ? `
+Typefaces for this design (${p.fonts.reason}):
+* Headline: ${p.fonts.headline}
+* Supporting line: ${p.fonts.supporting}
+* Call to action and small text: ${p.fonts.cta}`
+      : ""
+  }
 Colour palette: ${p.palette}
 Composition: ${p.composition}
 The advertisement should feel intelligent, confident and memorable.
@@ -148,7 +178,16 @@ ${o.experts
           .join("\n")}
 `
       : ""
-  }5. COPYWRITING
+  }4C. PRODUCTION STANDARDS
+No AI-type elements. The image must look made by a professional agency studio, never like AI art. Do not use:
+${bullets(NO_AI_ELEMENTS)}
+Professional alignment:
+${bullets(ALIGNMENT_RULES)}
+Typography:
+* Use the typefaces named above (two families at most: a characterful display face for the headline and a clean, highly legible face for the supporting text and CTA), set with professional kerning and leading.
+* Contrast through size and weight: headline about 7–10% of the image width in height, supporting line about 3.5–4.5%, CTA about 3–3.5%.
+* Text must be crisp and perfectly spelled; no outlines, drop shadows, glows, bevels or gradients on type.
+5. COPYWRITING
 Headline options considered:
 ${c.headlineOptions.slice(0, 3).map((h, i) => `${i + 1}. “${h}”`).join("\n")}
 Selected headline: “${c.headline}”

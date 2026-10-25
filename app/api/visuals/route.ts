@@ -1,7 +1,7 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
 import { AD_LAYOUT_RULES, COUNT_WORD, CREATIVE_COUNT, CREATIVE_STYLES, formatInfo, styleOrder, clampDepth, depthGuide, realismRules, styleGuide, styleName, creativeStylesGuide, type AdStyle } from "@/lib/craft";
-import { buildImageBrief, type BriefParts, type LogoUsage } from "@/lib/briefTemplate";
+import { NO_AI_ELEMENTS, buildImageBrief, type BriefParts, type LogoUsage } from "@/lib/briefTemplate";
 import { expertProfile, getExpert, type Expert } from "@/lib/experts";
 import { AppError, parseJson, respond, type Part } from "@/lib/openai";
 import { route } from "@/lib/server";
@@ -132,7 +132,7 @@ Respond with ONLY a JSON object: {"prompts":[${CREATIVE_STYLES.map((_, i) => `"p
   return { visuals };
 });
 
-const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 110–170 words: exactly what we see, where it sits in the frame, scale, materials, light, and how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"expertDirection":{"copywriter":"60–100 words in the copywriter's own voice: how the headline and lines are written, weighted and broken, applying their signature and approach","artDirector":"90–130 words: grid, margins, hierarchy, exact type style and relative sizes, colour use with hex, where every element sits, applying the art director's signature","visualizer":"70–110 words: how the visual idea is constructed and staged so it reads in 3 seconds, applying the visualizer's signature","maker":"110–160 words: for the photo ad, the photographer's full shoot spec (camera body, lens mm, aperture, shutter, ISO or film stock, light sources and modifiers, time of day, exact location, casting, wardrobe, props, colour grade) in their signature style; for the graphic ad, the illustrator's technique (medium, line quality, texture, print process, palette, how shapes are cut)"},"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
+const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 110–170 words: exactly what we see, where it sits in the frame, scale, materials, light, and how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","fonts":{"headline":"a real, named typeface and weight chosen for this design, e.g. Playfair Display Bold, Canela, GT Sectra, Oswald SemiBold","supporting":"a different real typeface and weight for the supporting line, e.g. Inter Regular, Söhne, IBM Plex Sans","cta":"typeface and weight for the CTA and small text","reason":"one short phrase on why this pairing fits the design"},"palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"expertDirection":{"copywriter":"60–100 words in the copywriter's own voice: how the headline and lines are written, weighted and broken, applying their signature and approach","artDirector":"90–130 words: grid, margins, hierarchy, exact type style and relative sizes, colour use with hex, where every element sits, applying the art director's signature","visualizer":"70–110 words: how the visual idea is constructed and staged so it reads in 3 seconds, applying the visualizer's signature","maker":"110–160 words: for the photo ad, the photographer's full shoot spec (camera body, lens mm, aperture, shutter, ISO or film stock, light sources and modifiers, time of day, exact location, casting, wardrobe, props, colour grade) in their signature style; for the graphic ad, the illustrator's technique (medium, line quality, texture, print process, palette, how shapes are cut)"},"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
 
 const LOGO_SHAPE = `"logo":{"zone":"bottom-right|bottom-left|top-right|top-left|bottom-center — the calmest place for the sign-off in THIS layout, away from the headline and the main visual","background":"what the area behind the logo must be so the logo reads perfectly, based on the logo's own colours (e.g. a plain light cream area, because the logo is navy and orange)","notes":"one or two sentences of further guidance for this ad, e.g. how the composition leads the eye to the sign-off"}`;
 
@@ -160,6 +160,7 @@ For each ad:
 - ${styleOrder("Ad").toUpperCase()}. Each ad's selectedDirection must fit its style and its approved idea and art-direction spec.
 - territories: 4 possible creative territories for the central thought; the selectedDirection is the chosen one, developed for this ad.
 - philosophy: 5–6 masters, each with the principle they bring (e.g. Steve Jobs — Simplicity, David Ogilvy — Persuasion, Bill Bernbach — Human insight, Saul Bass — Visual intelligence, Raghu Rai — Photographic authenticity, David Abbott — Restraint).
+- fonts: choose real, named typefaces that suit THIS ad's style, mood and brand (the two ads should not use the same pairing); the art director's signature decides the choice.
 - expertDirection: each specialist writes their part in their own field, drawing on THEIR profile above (experience, approach, signature, influences, what they never do). Be concrete and technical, specific to this ad, never generic.
 - Be truthful: never invent salary, prices, qualifications, benefits or claims not in the client brief.
 - Write in plain, intelligent English.
@@ -257,6 +258,10 @@ ${o.ideas
         palette: str(p.palette),
         composition: str(p.composition),
         creativeTest: arr(p.creativeTest),
+        fonts: (() => {
+          const f = (p as { fonts?: Record<string, unknown> }).fonts ?? {};
+          return str(f.headline) ? { headline: str(f.headline), supporting: str(f.supporting, "a clean sans-serif"), cta: str(f.cta, str(f.supporting, "a clean sans-serif")), reason: str(f.reason, "chosen for this design") } : undefined;
+        })(),
         objectiveShort: str(p.objectiveShort, "makes the right people interested"),
       },
     });
@@ -301,7 +306,7 @@ function pictureOnly(prompt: string, brandName: string, position: Layout["positi
 }
 
 function noTextSuffix(position: Layout["position"]) {
-  return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later, and keep the bottom-right corner plain for the logo.`;
+  return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later, and keep the bottom-right corner plain for the logo.\nNo AI-type elements: ${NO_AI_ELEMENTS.join("; ")}.`;
 }
 
 function normalizeVisual(v: Partial<Visual> = {}, prompt: string | undefined, style: AdStyle): Visual {
