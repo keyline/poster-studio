@@ -239,7 +239,7 @@ export default function Home() {
           <div className="page-head">
             <div>
               <h1>Create poster</h1>
-              <p className="muted">Brief → positioning → team → 3 ideas → 3 shoots → posters.</p>
+              <p className="muted">Brief → positioning → team → 2 ideas → 2 shoots → posters.</p>
             </div>
           </div>
           <Studio

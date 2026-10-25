@@ -1,7 +1,7 @@
 import { appealNames } from "@/lib/appeals";
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { clampDepth, depthGuide, formatInfo, threeStylesGuide } from "@/lib/craft";
+import { COUNT_WORD, CREATIVE_COUNT, clampDepth, depthGuide, formatInfo, styleOrder, creativeStylesGuide } from "@/lib/craft";
 import { expertProfile, getExpert } from "@/lib/experts";
 import { AppError, parseJson, respond } from "@/lib/openai";
 import { route } from "@/lib/server";
@@ -44,10 +44,10 @@ export const POST = route(async (req) => {
   const depth = clampDepth(rawDepth);
   const where = `${channel || "LinkedIn"}, in ${formatInfo(orientation).brief}`;
 
-  const direction = `THE THREE ADS — each idea is executed in a different style, in this order:\n${threeStylesGuide()}\n\n${depthGuide(depth)}`;
+  const direction = `THE ${COUNT_WORD.toUpperCase()} ADS — each idea is executed in a different style, in this order:\n${creativeStylesGuide()}\n\n${depthGuide(depth)}`;
   const brandAndBrief = `# Brand\n${brandContext(brand)}\n\n# Poster brief\n${brief}\n\n# Positioning appeal(s)\n${appealNames(appeals ?? []).join("\n") || "Choose what fits the brief best"}`;
 
-  // Step 1: the creative team develops three routes.
+  // Step 1: the creative team develops the routes, one per ad style.
   const teamSystem = `You are a creative team in a traditional advertising agency, working on an advertisement that will run on ${where}. It must look like an iconic print advertisement, not a typical social post or template.
 COPYWRITER — ${expertProfile(cw)}
 
@@ -61,7 +61,7 @@ Work the way an agency does: find the insight first, then the idea, then the wor
 
 ${direction}
 
-Develop exactly 3 distinctly different ideas (different insights and routes, not variations of one line). Idea 1 is the text-only ad, idea 2 the graphic ad, idea 3 the realistic-photo ad: shape each idea so it works best in its style (the text-only idea must live in its words and their arrangement).
+Develop exactly ${CREATIVE_COUNT} distinctly different ideas (different insights and routes, not variations of one line). ${styleOrder()}: shape each idea so it works best in its style.
 Every idea must be driven by the selected positioning appeal(s). Use the brand study: exploit market gaps, avoid what competitors already say, follow the brand do's and don'ts.
 
 ${COPY_RULES}
@@ -70,16 +70,16 @@ Respond with ONLY a JSON object:
 ${SHAPE}`;
 
   const first = await respond({ system: teamSystem, content: brandAndBrief, json: true });
-  const drafts = (parseJson<{ ideas: Idea[] }>(first.text).ideas ?? []).slice(0, 3);
+  const drafts = (parseJson<{ ideas: Idea[] }>(first.text).ideas ?? []).slice(0, CREATIVE_COUNT);
   if (drafts.length === 0) throw new AppError("No ideas came back. Please try again.", 502);
 
   // Step 2: the Executive Creative Director reviews and sharpens the work.
-  const cdSystem = `You are the Executive Creative Director of a top traditional ad agency reviewing your team's three routes before they go to the client.
+  const cdSystem = `You are the Executive Creative Director of a top traditional ad agency reviewing your team's ${COUNT_WORD} routes before they go to the client.
 
 ${direction}
 
-Judge each idea hard against: the brief; the positioning appeal(s); the creative depth target above (raise or lower the cleverness to match it exactly); its ad style (idea 1 text only, idea 2 graphic, idea 3 realistic photo); whether headline and visual truly work together; whether it could only be for THIS brand (not a competitor); clichés and AI-sounding copy; whether it reads in 3 seconds on a wall.
-Then return the improved versions: rewrite headlines, sharpen the visual concept, cut weak words. If an idea is weak or too close to another, replace it with a stronger one. Keep the three routes clearly different.
+Judge each idea hard against: the brief; the positioning appeal(s); the creative depth target above (raise or lower the cleverness to match it exactly); its ad style (${styleOrder()}); whether headline and visual truly work together; whether it could only be for THIS brand (not a competitor); clichés and AI-sounding copy; whether it reads in 3 seconds on a wall.
+Then return the improved versions: rewrite headlines, sharpen the visual concept, cut weak words. If an idea is weak or too close to another, replace it with a stronger one. Keep the routes clearly different from each other.
 For each, add "cdNote": one sentence on what you changed and why.
 
 ${COPY_RULES}
@@ -94,7 +94,7 @@ ${SHAPE.replace('"rationale"', '"cdNote":"","rationale"')}`;
       content: `${brandAndBrief}\n\n# The team's ideas\n${JSON.stringify({ ideas: drafts }, null, 1)}`,
       json: true,
     });
-    const reviewed = (parseJson<{ ideas: Idea[] }>(review.text).ideas ?? []).slice(0, 3);
+    const reviewed = (parseJson<{ ideas: Idea[] }>(review.text).ideas ?? []).slice(0, CREATIVE_COUNT);
     if (reviewed.length === drafts.length && reviewed.every((i) => i.headline !== undefined)) ideas = reviewed;
   } catch {
     // If the review fails, the team's own ideas are still usable.

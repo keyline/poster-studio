@@ -74,13 +74,20 @@ export const AD_LAYOUT_RULES = `PRINT AD LAYOUT (how real agency ads are built):
 - Max two typefaces. Body copy small and short.`;
 
 // Every run makes one creative of each kind, in this order.
-export const CREATIVE_STYLES: AdStyle[] = ["typographic", "graphic", "photo"];
+export const CREATIVE_STYLES: AdStyle[] = ["graphic", "photo"];
+export const CREATIVE_COUNT = CREATIVE_STYLES.length;
+export const COUNT_WORD = ["zero", "one", "two", "three", "four"][CREATIVE_COUNT] ?? String(CREATIVE_COUNT);
+
+// e.g. "idea 1 is the graphic ad, idea 2 the realistic photo ad"
+export function styleOrder(noun = "idea"): string {
+  return CREATIVE_STYLES.map((st, i) => `${noun} ${i + 1}${i === 0 ? " is" : ""} the ${styleName(st).toLowerCase()} ad`).join(", ");
+}
 
 export function styleName(style: AdStyle) {
   return AD_STYLES.find((s) => s.id === style)!.name;
 }
 
-export function threeStylesGuide(): string {
+export function creativeStylesGuide(): string {
   return CREATIVE_STYLES.map((st, i) => `Ad ${i + 1} — ${styleName(st).toUpperCase()}:\n${styleGuide(st)}`).join("\n\n");
 }
 

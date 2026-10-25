@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APPEALS } from "@/lib/appeals";
-import { CHANNELS, DEPTH_LABELS, FORMATS, formatInfo } from "@/lib/craft";
+import { CHANNELS, CREATIVE_COUNT, CREATIVE_STYLES, DEPTH_LABELS, FORMATS, formatInfo, styleName } from "@/lib/craft";
 import { forAi } from "@/lib/brandStore";
 import { api, canvasToJpeg, saveBlob } from "@/lib/client";
 import { EXPERTS, EXPERT_DETAILS, ROLES, avatarUrl } from "@/lib/experts";
@@ -118,7 +118,7 @@ export default function Studio({
   // Finished poster canvases, so "Download all" can export exactly what is on screen.
   const canvases = useRef<(HTMLCanvasElement | null)[]>([]);
   const canvasSetters = useMemo(
-    () => [0, 1, 2].map((i) => (c: HTMLCanvasElement | null) => (canvases.current[i] = c)),
+    () => CREATIVE_STYLES.map((_, i) => (c: HTMLCanvasElement | null) => (canvases.current[i] = c)),
     [],
   );
   const [downloading, setDownloading] = useState(false);
@@ -186,8 +186,16 @@ export default function Studio({
           placeholder="e.g. Durga Puja offer: 10% off on 3BHK flats at Rajarhat project, booking open till 15 Oct. Target: young families upgrading from rented homes. Mandatory: RERA no. on poster."
         />
         <p className="muted small three-kinds">
-          Every run creates three creatives: <b>1 · Text only</b> (typographic), <b>2 · Graphic</b> (illustration / poster art) and{" "}
-          <b>3 · Realistic photo</b>.
+          Every run creates {CREATIVE_COUNT} creatives:{" "}
+          {CREATIVE_STYLES.map((st, i) => (
+            <span key={st}>
+              {i > 0 && " and "}
+              <b>
+                {i + 1} · {styleName(st)}
+              </b>
+            </span>
+          ))}
+          .
         </p>
         <label>
           Creative depth: <b className="depth-value">{depth}</b> <span className="muted">· {DEPTH_LABELS[depth]}</span>
@@ -326,7 +334,7 @@ export default function Studio({
       {/* 5. Ideas */}
       {ideas.length > 0 && (
         <section className="panel" id="ideas">
-          <StepTitle n={5} title="Three ideas from your team" hint="Edit anything — the copy flows straight into the posters" />
+          <StepTitle n={5} title={`${CREATIVE_COUNT} ideas from your team`} hint="Edit anything — the copy flows straight into the posters" />
           <div className="ideas">
             {ideas.map((idea, i) => (
               <article className="idea" key={i}>
@@ -398,7 +406,7 @@ export default function Studio({
               ? "Art director & photographer are planning the shoot…"
               : visuals.length
                 ? "Rewrite the visual prompts"
-                : "Plan the shoot: write 3 visual prompts →"}
+                : `Plan the shoot: write ${CREATIVE_COUNT} visual prompts →`}
           </button>
           {error && !visuals.length && <div className="error">{error}</div>}
         </section>
@@ -407,7 +415,7 @@ export default function Studio({
       {/* 6. Visual prompts */}
       {visuals.length > 0 && (
         <section className="panel" id="visuals">
-          <StepTitle n={6} title="Shoot briefs" hint="Three different styles. Fine-tune before shooting." />
+          <StepTitle n={6} title="Shoot briefs" hint="A different style for each. Fine-tune before shooting." />
           <div className="ideas">
             {visuals.map((v, i) => (
               <article className="idea" key={i}>
@@ -430,7 +438,7 @@ export default function Studio({
             ))}
           </div>
           <button className="btn big" type="button" onClick={generateAll} disabled={posters.some((p) => p.loading)}>
-            {posters.some((p) => p.loading) ? "Shooting…" : posters.some((p) => p.src) ? "Reshoot all 3 posters" : "Shoot the 3 posters →"}
+            {posters.some((p) => p.loading) ? "Shooting…" : posters.some((p) => p.src) ? `Reshoot all ${CREATIVE_COUNT} posters` : `Shoot the ${CREATIVE_COUNT} posters →`}
           </button>
           <p className="muted small center">
             {config && (

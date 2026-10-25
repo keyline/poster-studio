@@ -1,6 +1,6 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { AD_LAYOUT_RULES, CREATIVE_STYLES, formatInfo, clampDepth, depthGuide, realismRules, styleGuide, styleName, threeStylesGuide, type AdStyle } from "@/lib/craft";
+import { AD_LAYOUT_RULES, COUNT_WORD, CREATIVE_STYLES, formatInfo, styleOrder, clampDepth, depthGuide, realismRules, styleGuide, styleName, creativeStylesGuide, type AdStyle } from "@/lib/craft";
 import { buildImageBrief, type BriefParts, type LogoUsage } from "@/lib/briefTemplate";
 import { expertProfile, getExpert, type Expert } from "@/lib/experts";
 import { AppError, parseJson, respond, type Part } from "@/lib/openai";
@@ -55,7 +55,7 @@ ${expertProfile(vz)}
 
 Turn each approved idea into a precise art-direction spec for a print ad in ${format.brief}, as you would brief a studio before the shoot. Each ad has its own style:
 
-${threeStylesGuide()}
+${creativeStylesGuide()}
 
 ${depthGuide(depth)}
 
@@ -87,10 +87,8 @@ Return them in the same order as the ideas.`;
     ? `TEXT IN THE IMAGE: this is the finished ad. Render the headline, subhead, CTA and tagline EXACTLY as written, each in double quotes, with the typeface style, size, colour and placement from the spec. Spell every word exactly; no other words, letters or numbers anywhere. Leave a clear empty area in the sign-off corner for the logo; do not draw any logo.`
     : `PICTURE ONLY — NO TEXT: the studio typesets the headline, body copy, CTA and logo afterwards with real fonts. So the spec's typography, copy and logo notes are NOT for you: ignore them and describe only the picture. Absolutely no letters, words, numbers, logos, brand names, signage, labels, screens with writing, or watermarks anywhere. Keep the zone where the type will sit calm, uncluttered and evenly toned so text reads cleanly on it. For the text-only ad (ad 1) the picture is just the background surface: a flat brand-colour field or uncoated paper with subtle print grain and at most one small graphic accent away from the centre.`;
 
-  const promptSystem = `You are the studio team finishing three ads. Each ad is made by its specialist:
-- Ad 1 (text only): ${makers.typographic}
-- Ad 2 (graphic): ${makers.graphic}
-- Ad 3 (realistic photo): ${makers.photo}
+  const promptSystem = `You are the studio team finishing ${COUNT_WORD} ads. Each ad is made by its specialist:
+${CREATIVE_STYLES.map((st, i) => `- Ad ${i + 1} (${styleName(st).toLowerCase()}): ${makers[st]}`).join("\n")}
 
 Write the final image-generation prompt (gpt-image) for each ad so the output looks like real work by a top agency, not like an AI picture.
 
@@ -103,12 +101,12 @@ ${
       ? `Each prompt: 170–260 words of plain prose. Start with "A ${orientation} print advertisement…", then the composition, the visual, (for the photo ad) lighting, camera, lens and film, palette, typography, texture and finish.
 
 Before answering, check every prompt: Is it clearly an ADVERTISEMENT with a designed layout? Is every word to render spelled exactly as given, with no other text? Would an art director believe a human made it? Fix it if not.`
-      : `Each prompt: 150–230 words of plain prose. Start ad 1 with "A ${orientation} background surface…", ad 2 with "A ${orientation} poster illustration…", ad 3 with "A ${orientation} advertising photograph…". Then the subject, composition (state exactly which part of the frame stays empty for type), (for the photo ad) lighting, camera, lens and film, palette, texture and finish.
+      : `Each prompt: 150–230 words of plain prose. ${CREATIVE_STYLES.map((st, i) => `Start ad ${i + 1} with "A ${orientation} ${st === "photo" ? "advertising photograph" : st === "graphic" ? "poster illustration" : "background surface"}…"`).join(", ")}. Then the subject, composition (state exactly which part of the frame stays empty for type), (for the photo ad) lighting, camera, lens and film, palette, texture and finish.
 
 Before answering, check every prompt: Does it mention a headline, words, typography, a logo or a brand name? Remove them. Is the empty type zone clearly described? Would an art director believe a human made it? Fix it if not.`
   }
 
-Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2","prompt for ad 3"]}`;
+Respond with ONLY a JSON object: {"prompts":[${CREATIVE_STYLES.map((_, i) => `"prompt for ad ${i + 1}"`).join(",")}]}`;
 
   const specText = ideas
     .map(
@@ -150,7 +148,7 @@ async function writeCreativeBriefs(o: {
   logo?: string;
 }): Promise<{ prompts: string[]; logoZones: (LogoPos | undefined)[] }> {
   const { cw, ad, vz, ph } = o.team;
-  const system = `You are a world-class advertising creative director writing the final creative brief for each of three advertisements. The brief will be handed to the studio as the production-ready visual-generation brief, so it must be specific, honest and visual.
+  const system = `You are a world-class advertising creative director writing the final creative brief for each of ${COUNT_WORD} advertisements. The brief will be handed to the studio as the production-ready visual-generation brief, so it must be specific, honest and visual.
 
 Your team (draw the CREATIVE PHILOSOPHY masters from their influences, and add Steve Jobs for simplicity if it fits):
 ${[cw && `COPYWRITER — ${expertProfile(cw)}`, `ART DIRECTOR — ${expertProfile(ad)}`, `VISUALIZER — ${expertProfile(vz)}`, `PHOTOGRAPHER — ${expertProfile(ph)}`].filter(Boolean).join("\n\n")}
@@ -158,7 +156,7 @@ ${[cw && `COPYWRITER — ${expertProfile(cw)}`, `ART DIRECTOR — ${expertProfil
 ${depthGuide(o.depth)}
 
 For each ad:
-- Ad 1 is a TEXT-ONLY typographic ad, ad 2 a GRAPHIC ad, ad 3 a REALISTIC PHOTO ad. Each ad's selectedDirection must fit its style and its approved idea and art-direction spec.
+- ${styleOrder("Ad").toUpperCase()}. Each ad's selectedDirection must fit its style and its approved idea and art-direction spec.
 - territories: 4 possible creative territories for the central thought; the selectedDirection is the chosen one, developed for this ad.
 - philosophy: 5–6 masters, each with the principle they bring (e.g. Steve Jobs — Simplicity, David Ogilvy — Persuasion, Bill Bernbach — Human insight, Saul Bass — Visual intelligence, Raghu Rai — Photographic authenticity, David Abbott — Restraint).
 - Be truthful: never invent salary, prices, qualifications, benefits or claims not in the client brief.
@@ -170,7 +168,7 @@ LOGO: the brand's real logo is attached as an image. Look at it carefully. Descr
       : ""
   }
 
-Respond with ONLY a JSON object: {${o.logo ? `"logoDescription":"…",` : ""}"briefs":[${o.logo ? PARTS_SHAPE.replace(/}$/, `,${LOGO_SHAPE}}`) : PARTS_SHAPE}, …two more]}`;
+Respond with ONLY a JSON object: {${o.logo ? `"logoDescription":"…",` : ""}"briefs":[${o.logo ? PARTS_SHAPE.replace(/}$/, `,${LOGO_SHAPE}}`) : PARTS_SHAPE}${CREATIVE_STYLES.length > 1 ? `, … ${CREATIVE_STYLES.length - 1} more` : ""}]}`;
 
   const content = `# Client
 ${brandContext(o.brand)}
