@@ -69,7 +69,11 @@ export default function Home() {
         <div className="wrap topbar-inner">
           <div className="logo">
             Poster<span>Studio</span>
-            <small>your creative agency</small>
+            <small>
+              your creative agency
+              {/* Shows which code version is live (Vercel sets this on every deployment). */}
+              {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA && ` · v${process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}`}
+            </small>
           </div>
           <nav>
             <button className={view.name !== "studio" && view.name !== "status" ? "on" : ""} onClick={() => setView({ name: "brands" })} type="button">
