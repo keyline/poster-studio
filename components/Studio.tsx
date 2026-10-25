@@ -65,8 +65,8 @@ export default function Studio({
     setBusy("ideas");
     setError("");
     try {
-      const { ideas } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, channel, depth });
-      setIdeas(ideas);
+      const { ideas: fresh } = await api<{ ideas: Idea[] }>("/api/ideas", { brand: brand && forAi(brand), brief, appeals, team, orientation, channel, depth });
+      setIdeas(fresh.slice(0, CREATIVE_COUNT));
       setVisuals([]);
       setPosters([]);
       setTimeout(() => document.getElementById("ideas")?.scrollIntoView({ behavior: "smooth" }), 50);

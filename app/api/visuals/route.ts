@@ -1,6 +1,6 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
-import { AD_LAYOUT_RULES, COUNT_WORD, CREATIVE_STYLES, formatInfo, styleOrder, clampDepth, depthGuide, realismRules, styleGuide, styleName, creativeStylesGuide, type AdStyle } from "@/lib/craft";
+import { AD_LAYOUT_RULES, COUNT_WORD, CREATIVE_COUNT, CREATIVE_STYLES, formatInfo, styleOrder, clampDepth, depthGuide, realismRules, styleGuide, styleName, creativeStylesGuide, type AdStyle } from "@/lib/craft";
 import { buildImageBrief, type BriefParts, type LogoUsage } from "@/lib/briefTemplate";
 import { expertProfile, getExpert, type Expert } from "@/lib/experts";
 import { AppError, parseJson, respond, type Part } from "@/lib/openai";
@@ -13,7 +13,7 @@ export const maxDuration = 300;
 const LAYOUT_SHAPE = `"layout":{"position":"top|bottom|left|right|center — where the headline block sits","tone":"light (white type) or dark (black type), whichever reads on that area","accent":"#hex from the brand palette","font":"serif|sans|condensed"}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, ideas, team, orientation, channel: rawChannel, brief, textMode, depth: rawDepth, logo: rawLogo } = (await req.json()) as {
+  const { brand: rawBrand, ideas: rawIdeas, team, orientation, channel: rawChannel, brief, textMode, depth: rawDepth, logo: rawLogo } = (await req.json()) as {
     brand: unknown;
     ideas: Idea[];
     team: Team;
@@ -25,7 +25,8 @@ export const POST = route(async (req) => {
     depth: unknown;
   };
   const brand = sanitizeBrand(rawBrand);
-  if (!Array.isArray(ideas) || ideas.length === 0) throw new AppError("Create the ideas first.", 400);
+  if (!Array.isArray(rawIdeas) || rawIdeas.length === 0) throw new AppError("Create the ideas first.", 400);
+  const ideas = rawIdeas.slice(0, CREATIVE_COUNT);
   const ad = getExpert(team?.artDirector);
   const ph = getExpert(team?.photographer);
   const cw = getExpert(team?.copywriter);
@@ -131,7 +132,7 @@ Respond with ONLY a JSON object: {"prompts":[${CREATIVE_STYLES.map((_, i) => `"p
   return { visuals };
 });
 
-const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 70–120 words: what we see, where, how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
+const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 110–170 words: exactly what we see, where it sits in the frame, scale, materials, light, and how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"expertDirection":{"copywriter":"60–100 words in the copywriter's own voice: how the headline and lines are written, weighted and broken, applying their signature and approach","artDirector":"90–130 words: grid, margins, hierarchy, exact type style and relative sizes, colour use with hex, where every element sits, applying the art director's signature","visualizer":"70–110 words: how the visual idea is constructed and staged so it reads in 3 seconds, applying the visualizer's signature","maker":"110–160 words: for the photo ad, the photographer's full shoot spec (camera body, lens mm, aperture, shutter, ISO or film stock, light sources and modifiers, time of day, exact location, casting, wardrobe, props, colour grade) in their signature style; for the graphic ad, the illustrator's technique (medium, line quality, texture, print process, palette, how shapes are cut)"},"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
 
 const LOGO_SHAPE = `"logo":{"zone":"bottom-right|bottom-left|top-right|top-left|bottom-center — the calmest place for the sign-off in THIS layout, away from the headline and the main visual","background":"what the area behind the logo must be so the logo reads perfectly, based on the logo's own colours (e.g. a plain light cream area, because the logo is navy and orange)","notes":"one or two sentences of further guidance for this ad, e.g. how the composition leads the eye to the sign-off"}`;
 
@@ -159,6 +160,7 @@ For each ad:
 - ${styleOrder("Ad").toUpperCase()}. Each ad's selectedDirection must fit its style and its approved idea and art-direction spec.
 - territories: 4 possible creative territories for the central thought; the selectedDirection is the chosen one, developed for this ad.
 - philosophy: 5–6 masters, each with the principle they bring (e.g. Steve Jobs — Simplicity, David Ogilvy — Persuasion, Bill Bernbach — Human insight, Saul Bass — Visual intelligence, Raghu Rai — Photographic authenticity, David Abbott — Restraint).
+- expertDirection: each specialist writes their part in their own field, drawing on THEIR profile above (experience, approach, signature, influences, what they never do). Be concrete and technical, specific to this ad, never generic.
 - Be truthful: never invent salary, prices, qualifications, benefits or claims not in the client brief.
 - Write in plain, intelligent English.
 ${
@@ -202,7 +204,17 @@ ${o.ideas
     const options = [idea.headline, ...arr(idea.headlineOptions)].filter((h, k, all) => h && all.indexOf(h) === k);
     const lz = p.logo?.zone && zones.includes(p.logo.zone) ? p.logo.zone : "bottom-right";
     logoZones[n] = o.logo ? lz : undefined;
+    const ed = (p as { expertDirection?: Record<string, unknown> }).expertDirection ?? {};
+    const isPhoto = (CREATIVE_STYLES[n] ?? "photo") === "photo";
     return buildImageBrief({
+      experts: [
+        cw && { role: "Copywriter", name: cw.name, text: str(ed.copywriter) },
+        { role: "Art director", name: ad.name, text: str(ed.artDirector) },
+        { role: "Visualizer", name: vz.name, text: str(ed.visualizer) },
+        isPhoto
+          ? { role: "Photographer", name: ph.name, text: str(ed.maker) }
+          : { role: "Illustrator", name: "studio illustrator, following " + vz.name, text: str(ed.maker) },
+      ].filter(Boolean) as { role: string; name: string; text: string }[],
       logo: o.logo
         ? {
             description: str(parsed.logoDescription, `the ${o.brand.name} logo`),

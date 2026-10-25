@@ -72,6 +72,7 @@ export function buildImageBrief(o: {
   channel: string;
   formatLine: string; // e.g. "a 4:5 vertical format, 1080 × 1350 pixels"
   logo?: LogoUsage; // set when the brand has a logo: it is composited afterwards, never drawn by the AI
+  experts?: { role: string; name: string; text: string }[]; // each team member's direction in their own field
 }): string {
   const { parts: p, copy: c } = o;
   const brandUpper = c.brandName.toUpperCase();
@@ -132,7 +133,17 @@ Typography: ${p.typography}
 Colour palette: ${p.palette}
 Composition: ${p.composition}
 The advertisement should feel intelligent, confident and memorable.
-5. COPYWRITING
+${
+    o.experts?.some((e) => e.text)
+      ? `4B. EXPERT DIRECTION
+Each specialist's direction for this advertisement, in their own field:
+${o.experts
+          .filter((e) => e.text)
+          .map((e) => `${e.role.toUpperCase()} — ${e.name}\n${e.text}`)
+          .join("\n")}
+`
+      : ""
+  }5. COPYWRITING
 Headline options considered:
 ${c.headlineOptions.slice(0, 3).map((h, i) => `${i + 1}. “${h}”`).join("\n")}
 Selected headline: “${c.headline}”
