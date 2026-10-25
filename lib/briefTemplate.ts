@@ -28,6 +28,7 @@ export type BriefParts = {
 
 export type LogoUsage = {
   description: string; // what the real logo looks like (from the Creative Director looking at it)
+  hasName: boolean; // the logo already contains the organisation's name
   zone: Exclude<LogoPos, "auto">;
   background: string; // what the area behind the logo must be like
   notes: string; // any further guidance for this ad
@@ -91,7 +92,11 @@ export function buildImageBrief(o: {
     `A powerful headline: “${c.headline}”`,
     c.supportingLine && `A short supporting line: “${c.supportingLine}”`,
     c.keyInfo && `The key information: “${c.keyInfo}”`,
-    o.logo ? "" : `The company name: “${brandUpper}”`,
+    !o.logo
+      ? `The company name: “${brandUpper}”`
+      : o.logo.hasName
+        ? ""
+        : `The company name: “${brandUpper}”, set once, small, beside the logo space as part of the sign-off`,
     c.cta && `A concise call to action: “${c.cta}”`,
   ].filter(Boolean) as string[];
 
@@ -153,11 +158,18 @@ Render every one of these words exactly as written, spelled correctly, and no ot
 Do not invent salary, prices, qualifications, benefits, dates or claims that are not given above.
 ${
     o.logo
-      ? `The company is identified by its real logo, which is placed on the finished image afterwards. Do not write the company name anywhere and do not draw any logo, emblem, monogram or wordmark.
+      ? `The company is identified by its real logo, which is placed on the finished image afterwards. Do not draw any logo, emblem, monogram or wordmark.
+${
+        o.logo.hasName
+          ? `The logo already contains the organisation name, so do NOT write "${c.brandName}" or any version of the organisation name anywhere in the image.`
+          : `The logo is a symbol without the name, so write the organisation name exactly once, as listed above, beside the logo space; never repeat it elsewhere.`
+      }
 5B. LOGO USAGE
 The real ${c.brandName} logo: ${o.logo.description}
 Sign-off position: the ${ZONE_WORDS[o.logo.zone]}, inside the margins.
-Reserve a clean, empty sign-off area there about 24% of the image width and 9% of its height, with clear space around it equal to at least half its height. Nothing else may enter this area: no text, objects, people or busy texture.
+Logo size: as on a professionally designed social media post. The logo is about 18% of the image width (about 190 px wide on a 1080 px post), never smaller than 14% or larger than 24% of the width, so it is clearly readable on a phone without competing with the headline.
+Reserve a clean, empty sign-off area there about 22% of the image width and 9% of its height, with clear space around it equal to at least half the logo height. Nothing else may enter this area: no text, objects, people or busy texture.
+The logo is placed as a transparent cut-out (any white or coloured box around it removed), directly on this area, so keep the area a plain, even tone that contrasts with the logo. Only if the background cannot be kept plain, the logo may sit on a small solid backing panel in a brand colour.
 Background behind the logo: ${o.logo.background}
 ${o.logo.notes}
 Treat the logo the way a brand guideline would: it is the sign-off of the advertisement, calm and confident, never decorative, never repeated.`

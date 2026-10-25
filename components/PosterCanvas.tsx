@@ -133,12 +133,13 @@ function signOff(ctx: CanvasRenderingContext2D, logo: PreparedLogo | null, style
   let lw = 0;
   let lh = 0;
   if (logo) {
-    lw = W * 0.2;
-    lh = (lw * logo.h) / logo.w;
-    if (lh > H * 0.08) {
-      lh = H * 0.08;
-      lw = (lh * logo.w) / logo.h;
-    }
+    // Social-media sign-off size: about 18% of the width (14–24%), height kept between 4% and 8.5%.
+    const ratio = logo.w / logo.h;
+    lw = W * 0.18;
+    lh = lw / ratio;
+    if (lh > H * 0.085) lw = Math.max(W * 0.14 * Math.min(1, ratio / 2), H * 0.085 * ratio);
+    if (lw / ratio < H * 0.04) lw = Math.min(W * 0.24, H * 0.04 * ratio);
+    lh = lw / ratio;
   }
   const tSize = Math.round(W * 0.022);
   ctx.font = `500 ${tSize}px ${BODY_FONT}`;

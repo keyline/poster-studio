@@ -166,11 +166,11 @@ For each ad:
 ${
     o.logo
       ? `
-LOGO: the brand's real logo is attached as an image. Look at it carefully. Describe it precisely once in "logoDescription" (shape, symbol, wordmark, colours, horizontal or stacked, whether it needs a light or dark background). The logo is added to the finished image afterwards, exactly as it is, so the image must never draw a logo or write the brand name. For each ad decide the sign-off position and the background behind it so the logo is clearly legible and looks intentional, the way a brand guideline would place it.`
+LOGO: the brand's real logo is attached as an image. Look at it carefully. Describe it precisely once in "logoDescription" (shape, symbol, wordmark, colours, horizontal or stacked, whether it needs a light or dark background), and set "logoHasName" to true if the organisation's name is readable inside the logo, false if it is a symbol only. The logo is added to the finished image afterwards, exactly as it is, so the image must never draw a logo or write the brand name. For each ad decide the sign-off position and the background behind it so the logo is clearly legible and looks intentional, the way a brand guideline would place it.`
       : ""
   }
 
-Respond with ONLY a JSON object: {${o.logo ? `"logoDescription":"…",` : ""}"briefs":[${o.logo ? PARTS_SHAPE.replace(/}$/, `,${LOGO_SHAPE}}`) : PARTS_SHAPE}${CREATIVE_STYLES.length > 1 ? `, … ${CREATIVE_STYLES.length - 1} more` : ""}]}`;
+Respond with ONLY a JSON object: {${o.logo ? `"logoDescription":"…","logoHasName":true,` : ""}"briefs":[${o.logo ? PARTS_SHAPE.replace(/}$/, `,${LOGO_SHAPE}}`) : PARTS_SHAPE}${CREATIVE_STYLES.length > 1 ? `, … ${CREATIVE_STYLES.length - 1} more` : ""}]}`;
 
   const content = `# Client
 ${brandContext(o.brand)}
@@ -192,7 +192,7 @@ ${o.ideas
   const parts: Part[] = [{ type: "input_text", text: content }];
   if (o.logo) parts.push({ type: "input_text", text: "The brand logo:" }, { type: "input_image", image_url: o.logo });
   const res = await respond({ system, content: parts, json: true });
-  const parsed = parseJson<{ logoDescription?: string; briefs: (Partial<BriefParts> & { logo?: Partial<LogoUsage> })[] }>(res.text);
+  const parsed = parseJson<{ logoDescription?: string; logoHasName?: boolean; briefs: (Partial<BriefParts> & { logo?: Partial<LogoUsage> })[] }>(res.text);
   const briefs = parsed.briefs ?? [];
   const zones: LogoUsage["zone"][] = ["bottom-right", "bottom-left", "top-right", "top-left", "bottom-center"];
   const logoZones: (LogoPos | undefined)[] = [];
@@ -218,6 +218,8 @@ ${o.ideas
       logo: o.logo
         ? {
             description: str(parsed.logoDescription, `the ${o.brand.name} logo`),
+            // Default to "the name is in the logo" so the name is never duplicated by mistake.
+            hasName: parsed.logoHasName !== false,
             zone: lz,
             background: str(p.logo?.background, "a plain, calm area in a colour that contrasts with the logo"),
             notes: str(p.logo?.notes),
