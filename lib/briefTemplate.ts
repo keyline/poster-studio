@@ -1,4 +1,5 @@
 import { styleGuide, type AdStyle } from "./craft";
+import type { LogoPos } from "./types";
 
 // The creative-director brief that becomes the final image prompt (one per ad).
 // The section structure is fixed here; the creative content comes from the team.
@@ -23,6 +24,21 @@ export type BriefParts = {
   composition: string;
   creativeTest: string[];
   objectiveShort: string; // "makes the right person interested in the opportunity"
+};
+
+export type LogoUsage = {
+  description: string; // what the real logo looks like (from the Creative Director looking at it)
+  zone: Exclude<LogoPos, "auto">;
+  background: string; // what the area behind the logo must be like
+  notes: string; // any further guidance for this ad
+};
+
+const ZONE_WORDS: Record<LogoUsage["zone"], string> = {
+  "bottom-right": "bottom-right corner",
+  "bottom-left": "bottom-left corner",
+  "top-right": "top-right corner",
+  "top-left": "top-left corner",
+  "bottom-center": "bottom centre",
 };
 
 export type BriefCopy = {
@@ -55,6 +71,7 @@ export function buildImageBrief(o: {
   style: AdStyle;
   channel: string;
   formatLine: string; // e.g. "a 4:5 vertical format, 1080 × 1350 pixels"
+  logo?: LogoUsage; // set when the brand has a logo: it is composited afterwards, never drawn by the AI
 }): string {
   const { parts: p, copy: c } = o;
   const brandUpper = c.brandName.toUpperCase();
@@ -73,7 +90,7 @@ export function buildImageBrief(o: {
     `A powerful headline: “${c.headline}”`,
     c.supportingLine && `A short supporting line: “${c.supportingLine}”`,
     c.keyInfo && `The key information: “${c.keyInfo}”`,
-    `The company name: “${brandUpper}”`,
+    o.logo ? "" : `The company name: “${brandUpper}”`,
     c.cta && `A concise call to action: “${c.cta}”`,
   ].filter(Boolean) as string[];
 
@@ -123,7 +140,18 @@ The final advertisement should contain only:
 ${finalCopy.map((l, i) => `${i + 1}. ${l}`).join("\n")}
 Render every one of these words exactly as written, spelled correctly, and no other words, numbers or letters anywhere.
 Do not invent salary, prices, qualifications, benefits, dates or claims that are not given above.
-Leave the bottom-right corner (about 20% of the width) clear: the brand logo is placed there afterwards, so do not draw any logo or emblem.
+${
+    o.logo
+      ? `The company is identified by its real logo, which is placed on the finished image afterwards. Do not write the company name anywhere and do not draw any logo, emblem, monogram or wordmark.
+5B. LOGO USAGE
+The real ${c.brandName} logo: ${o.logo.description}
+Sign-off position: the ${ZONE_WORDS[o.logo.zone]}, inside the margins.
+Reserve a clean, empty sign-off area there about 24% of the image width and 9% of its height, with clear space around it equal to at least half its height. Nothing else may enter this area: no text, objects, people or busy texture.
+Background behind the logo: ${o.logo.background}
+${o.logo.notes}
+Treat the logo the way a brand guideline would: it is the sign-off of the advertisement, calm and confident, never decorative, never repeated.`
+      : "Leave the bottom-right corner (about 20% of the width) clear for the sign-off, and do not draw any logo or emblem."
+  }
 6. ${o.channel.toUpperCase()} EXECUTION
 Design the main creative in ${o.formatLine}.
 It must remain legible on a mobile screen.

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { canvasToJpeg, loadImage, saveBlob } from "@/lib/client";
 import { areaLuminance, blendShare, prepareLogo, tintLogo, type LogoStyle, type PreparedLogo } from "@/lib/logo";
-import type { Layout } from "@/lib/types";
+import type { Layout, LogoPos } from "@/lib/types";
 
 const FONTS = {
   serif: '"Playfair Display", Georgia, serif',
@@ -133,10 +133,10 @@ function signOff(ctx: CanvasRenderingContext2D, logo: PreparedLogo | null, style
   let lw = 0;
   let lh = 0;
   if (logo) {
-    lw = W * 0.17;
+    lw = W * 0.2;
     lh = (lw * logo.h) / logo.w;
-    if (lh > H * 0.07) {
-      lh = H * 0.07;
+    if (lh > H * 0.08) {
+      lh = H * 0.08;
       lw = (lh * logo.w) / logo.h;
     }
   }
@@ -286,15 +286,35 @@ async function draw(canvas: HTMLCanvasElement, src: string, copy: Copy, layout: 
     if (copy.cta) drawCta(ctx, copy.cta, block.ctaSize, center ? W / 2 - cta.w / 2 : x0, y + block.ctaSize * 1.2, accent);
   }
 
-  // Sign-off in the corner furthest from the copy.
+  // Sign-off: where the brief placed it, otherwise the calmest corner (or the corner furthest from the copy).
   if (sign.h) {
     const m = W * 0.05;
-    const bottom = !hasCopy || position === "top" || position === "left" || position === "right";
-    const right = !(hasCopy && position === "right");
-    const sx = right ? W - m - sign.w : m;
-    const sy = bottom ? H - m - sign.h : m;
-    const signInk = tone === "auto" ? (areaStats(ctx, sx, sy, sign.w, sign.h).mean > 0.55 ? BLACK : WHITE) : ink;
-    sign.draw(right ? W - m : m, sy, right, signInk, true);
+    type Spot = { x: number; y: number; right: boolean };
+    const spots: Record<Exclude<LogoPos, "auto">, Spot> = {
+      "bottom-right": { x: W - m, y: H - m - sign.h, right: true },
+      "bottom-left": { x: m, y: H - m - sign.h, right: false },
+      "top-right": { x: W - m, y: m, right: true },
+      "top-left": { x: m, y: m, right: false },
+      "bottom-center": { x: (W - sign.w) / 2, y: H - m - sign.h, right: false },
+    };
+    const box = (s: Spot) => ({ x: s.right ? s.x - sign.w : s.x, y: s.y, w: sign.w, h: sign.h });
+    let spot: Spot;
+    if (layout.logoPos && layout.logoPos !== "auto") spot = spots[layout.logoPos];
+    else if (hasCopy) {
+      const bottom = position === "top" || position === "left" || position === "right";
+      spot = position === "right" ? spots[bottom ? "bottom-left" : "top-left"] : spots[bottom ? "bottom-right" : "top-right"];
+    } else {
+      // Pick the least busy corner of the finished image, preferring the classic bottom-right.
+      const order: Exclude<LogoPos, "auto">[] = ["bottom-right", "bottom-left", "bottom-center", "top-right", "top-left"];
+      const scored = order.map((k, i) => {
+        const b = box(spots[k]);
+        return { k, score: areaStats(ctx, b.x, b.y, b.w, b.h).spread + i * 0.01 };
+      });
+      spot = spots[scored.sort((a, b) => a.score - b.score)[0].k];
+    }
+    const b = box(spot);
+    const signInk = tone === "auto" ? (areaStats(ctx, b.x, b.y, b.w, b.h).mean > 0.55 ? BLACK : WHITE) : ink;
+    sign.draw(spot.x, spot.y, spot.right, signInk, true);
   }
 }
 
@@ -318,7 +338,7 @@ export default function PosterCanvas(props: {
 
   useEffect(() => {
     if (ref.current) draw(ref.current, src, copy, layout, showText, logo, aspect).catch(() => {});
-  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, layout.logoStyle, showText, logo, aspect]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [src, copy.headline, copy.subhead, copy.cta, copy.body, copy.tagline, layout.position, layout.tone, layout.accent, layout.font, layout.panel, layout.logoStyle, layout.logoPos, showText, logo, aspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function download() {
     if (ref.current) canvasToJpeg(ref.current).then((b) => saveBlob(b, props.filename), () => {});

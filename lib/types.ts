@@ -73,6 +73,7 @@ export type Layout = {
   font: "serif" | "sans" | "condensed";
   panel?: boolean; // copy on a solid panel beside/below the picture (default) instead of over it
   logoStyle?: "auto" | "original" | "white" | "black" | "badge";
+  logoPos?: LogoPos;
 };
 
 export type Visual = {
@@ -91,3 +92,6 @@ export type Team = {
 };
 
 export type TextMode = "overlay" | "ai";
+
+export type LogoPos = "auto" | "bottom-right" | "bottom-left" | "top-right" | "top-left" | "bottom-center";
+export const LOGO_POSITIONS: LogoPos[] = ["auto", "bottom-right", "bottom-left", "top-right", "top-left", "bottom-center"];

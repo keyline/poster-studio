@@ -1,11 +1,11 @@
 import { brandContext } from "@/lib/brandContext";
 import { sanitizeBrand } from "@/lib/brandInput";
 import { AD_LAYOUT_RULES, CREATIVE_STYLES, formatInfo, clampDepth, depthGuide, realismRules, styleGuide, styleName, threeStylesGuide, type AdStyle } from "@/lib/craft";
-import { buildImageBrief, type BriefParts } from "@/lib/briefTemplate";
+import { buildImageBrief, type BriefParts, type LogoUsage } from "@/lib/briefTemplate";
 import { expertProfile, getExpert, type Expert } from "@/lib/experts";
-import { AppError, parseJson, respond } from "@/lib/openai";
+import { AppError, parseJson, respond, type Part } from "@/lib/openai";
 import { route } from "@/lib/server";
-import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
+import type { Brand, Idea, Layout, LogoPos, Team, TextMode, Visual } from "@/lib/types";
 
 // Two agency steps: art direction (layout spec), then the final image prompt.
 export const maxDuration = 300;
@@ -13,13 +13,14 @@ export const maxDuration = 300;
 const LAYOUT_SHAPE = `"layout":{"position":"top|bottom|left|right|center — where the headline block sits","tone":"light (white type) or dark (black type), whichever reads on that area","accent":"#hex from the brand palette","font":"serif|sans|condensed"}`;
 
 export const POST = route(async (req) => {
-  const { brand: rawBrand, ideas, team, orientation, channel: rawChannel, brief, textMode, depth: rawDepth } = (await req.json()) as {
+  const { brand: rawBrand, ideas, team, orientation, channel: rawChannel, brief, textMode, depth: rawDepth, logo: rawLogo } = (await req.json()) as {
     brand: unknown;
     ideas: Idea[];
     team: Team;
     orientation: string;
     channel?: string;
     brief?: string;
+    logo?: string; // the brand logo (data URL), so the Creative Director can plan its use
     textMode: TextMode;
     depth: unknown;
   };
@@ -34,6 +35,7 @@ export const POST = route(async (req) => {
   const aiText = textMode !== "overlay";
   const channel = rawChannel || "LinkedIn";
   const format = formatInfo(orientation);
+  const logo = typeof rawLogo === "string" && rawLogo.startsWith("data:image/") && rawLogo.length < 1_500_000 ? rawLogo : undefined;
   const styleOf = (n: number): AdStyle => CREATIVE_STYLES[n] ?? "photo";
 
   const ideasText = ideas
@@ -69,9 +71,10 @@ Return them in the same order as the ideas.`;
   const specs = parseJson<{ visuals: Partial<Visual>[] }>(specRes.text).visuals ?? [];
 
   let prompts: string[];
+  let logoZones: (LogoPos | undefined)[] = [];
   if (aiText) {
     // Step 2: the Creative Director writes a full creative brief per ad; the app assembles it in the house format.
-    prompts = await writeCreativeBriefs({ brand, ideas, specs, team: { cw, ad, vz, ph }, channel, format, brief: brief ?? "", depth });
+    ({ prompts, logoZones } = await writeCreativeBriefs({ brand, ideas, specs, team: { cw, ad, vz, ph }, channel, format, brief: brief ?? "", depth, logo }));
   } else {
   // Step 2: the right specialist for each ad writes its final image-generation prompt.
   const makers: Record<AdStyle, string> = {
@@ -121,6 +124,7 @@ Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2"
 
   const visuals: Visual[] = ideas.map((_, i) => {
     const v = normalizeVisual(specs[i], prompts[i], styleOf(i));
+    v.layout.logoPos = logoZones[i] ?? "auto";
     // A hard rule in code, because image models otherwise like to add words and fake logos.
     if (v.prompt && !aiText) v.prompt = pictureOnly(v.prompt, brand.name, v.layout.position);
     return v;
@@ -130,6 +134,8 @@ Respond with ONLY a JSON object: {"prompts":["prompt for ad 1","prompt for ad 2"
 });
 
 const PARTS_SHAPE = `{"adType":"e.g. Recruitment Advertisement: Telecaller for Technology Products","brandDescriptor":"e.g. a Kolkata-based digital technology company","objective":"1–3 sentences: what the client needs, from the brief","mustNotLookLike":["4–5 things, e.g. a typical LinkedIn recruitment post","a job portal advertisement","a generic Canva template"],"insightHeadline":"two short sentences contrasting what most ads in this category do with what great ones do","insightBody":"1–2 sentences on what the product/role/offer really is","insightPoints":["4–5 short lines on what it truly means for the audience"],"challenge":"the creative challenge in 1–2 sentences, honest, no exaggeration","centralThought":"the central thought in one sentence","territories":[{"name":"2–4 words","description":"one sentence"}],"selectedDirection":"the ONE chosen visual for THIS ad, described in 70–120 words: what we see, where, how it carries the idea","philosophy":[{"name":"a master, e.g. David Ogilvy","principle":"one word, e.g. Persuasion","text":"2–3 sentences applying it to this ad"}],"visualRequirements":["5–8 bullets"],"avoid":["6–9 bullets of clichés to avoid for this category"],"typography":"one sentence","palette":"one sentence with hex colours from the brand","composition":"one sentence","creativeTest":["6–7 questions"],"objectiveShort":"finish the sentence 'The objective is to create an advertisement that …'"}`;
+
+const LOGO_SHAPE = `"logo":{"zone":"bottom-right|bottom-left|top-right|top-left|bottom-center — the calmest place for the sign-off in THIS layout, away from the headline and the main visual","background":"what the area behind the logo must be so the logo reads perfectly, based on the logo's own colours (e.g. a plain light cream area, because the logo is navy and orange)","notes":"one or two sentences of further guidance for this ad, e.g. how the composition leads the eye to the sign-off"}`;
 
 // The Creative Director writes the content of each ad's brief; buildImageBrief puts it in the house format.
 async function writeCreativeBriefs(o: {
@@ -141,7 +147,8 @@ async function writeCreativeBriefs(o: {
   format: ReturnType<typeof formatInfo>;
   brief: string;
   depth: number;
-}): Promise<string[]> {
+  logo?: string;
+}): Promise<{ prompts: string[]; logoZones: (LogoPos | undefined)[] }> {
   const { cw, ad, vz, ph } = o.team;
   const system = `You are a world-class advertising creative director writing the final creative brief for each of three advertisements. The brief will be handed to the studio as the production-ready visual-generation brief, so it must be specific, honest and visual.
 
@@ -156,8 +163,14 @@ For each ad:
 - philosophy: 5–6 masters, each with the principle they bring (e.g. Steve Jobs — Simplicity, David Ogilvy — Persuasion, Bill Bernbach — Human insight, Saul Bass — Visual intelligence, Raghu Rai — Photographic authenticity, David Abbott — Restraint).
 - Be truthful: never invent salary, prices, qualifications, benefits or claims not in the client brief.
 - Write in plain, intelligent English.
+${
+    o.logo
+      ? `
+LOGO: the brand's real logo is attached as an image. Look at it carefully. Describe it precisely once in "logoDescription" (shape, symbol, wordmark, colours, horizontal or stacked, whether it needs a light or dark background). The logo is added to the finished image afterwards, exactly as it is, so the image must never draw a logo or write the brand name. For each ad decide the sign-off position and the background behind it so the logo is clearly legible and looks intentional, the way a brand guideline would place it.`
+      : ""
+  }
 
-Respond with ONLY a JSON object: {"briefs":[${PARTS_SHAPE}, …two more]}`;
+Respond with ONLY a JSON object: {${o.logo ? `"logoDescription":"…",` : ""}"briefs":[${o.logo ? PARTS_SHAPE.replace(/}$/, `,${LOGO_SHAPE}}`) : PARTS_SHAPE}, …two more]}`;
 
   const content = `# Client
 ${brandContext(o.brand)}
@@ -176,15 +189,30 @@ ${o.ideas
   )
   .join("\n\n")}`;
 
-  const res = await respond({ system, content, json: true });
-  const briefs = parseJson<{ briefs: Partial<BriefParts>[] }>(res.text).briefs ?? [];
+  const parts: Part[] = [{ type: "input_text", text: content }];
+  if (o.logo) parts.push({ type: "input_text", text: "The brand logo:" }, { type: "input_image", image_url: o.logo });
+  const res = await respond({ system, content: parts, json: true });
+  const parsed = parseJson<{ logoDescription?: string; briefs: (Partial<BriefParts> & { logo?: Partial<LogoUsage> })[] }>(res.text);
+  const briefs = parsed.briefs ?? [];
+  const zones: LogoUsage["zone"][] = ["bottom-right", "bottom-left", "top-right", "top-left", "bottom-center"];
+  const logoZones: (LogoPos | undefined)[] = [];
 
-  return o.ideas.map((idea, n) => {
+  const prompts = o.ideas.map((idea, n) => {
     const p = briefs[n] ?? {};
     const arr = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
     const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v.trim() : fallback);
     const options = [idea.headline, ...arr(idea.headlineOptions)].filter((h, k, all) => h && all.indexOf(h) === k);
+    const lz = p.logo?.zone && zones.includes(p.logo.zone) ? p.logo.zone : "bottom-right";
+    logoZones[n] = o.logo ? lz : undefined;
     return buildImageBrief({
+      logo: o.logo
+        ? {
+            description: str(parsed.logoDescription, `the ${o.brand.name} logo`),
+            zone: lz,
+            background: str(p.logo?.background, "a plain, calm area in a colour that contrasts with the logo"),
+            notes: str(p.logo?.notes),
+          }
+        : undefined,
       style: CREATIVE_STYLES[n] ?? "photo",
       channel: o.channel,
       formatLine: o.format.brief,
@@ -221,6 +249,7 @@ ${o.ideas
       },
     });
   });
+  return { prompts, logoZones };
 }
 
 const ZONE: Record<Layout["position"], string> = {
@@ -260,7 +289,7 @@ function pictureOnly(prompt: string, brandName: string, position: Layout["positi
 }
 
 function noTextSuffix(position: Layout["position"]) {
-  return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later.`;
+  return `\n\nIMPORTANT: the image contains no text of any kind: no letters, words, numbers, logos, brand names, signage or watermarks. Keep the ${ZONE[position]} of the frame as clean, calm negative space for typography that will be added later, and keep the bottom-right corner plain for the logo.`;
 }
 
 function normalizeVisual(v: Partial<Visual> = {}, prompt: string | undefined, style: AdStyle): Visual {

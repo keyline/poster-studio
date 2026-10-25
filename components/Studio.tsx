@@ -7,7 +7,7 @@ import { forAi } from "@/lib/brandStore";
 import { api, canvasToJpeg, saveBlob } from "@/lib/client";
 import { EXPERTS, EXPERT_DETAILS, ROLES, avatarUrl } from "@/lib/experts";
 import { QUALITIES, allowed, bestQualityWithin, estimateCost, type Quality } from "@/lib/imageCost";
-import type { Brand, Idea, Layout, Team, TextMode, Visual } from "@/lib/types";
+import { LOGO_POSITIONS, type Brand, type Idea, type Layout, type LogoPos, type Team, type TextMode, type Visual } from "@/lib/types";
 import PosterCanvas from "./PosterCanvas";
 
 type Poster = { src?: string; loading?: boolean; error?: string; layout: Layout; showText: boolean; quality?: string; cost?: number | null };
@@ -81,7 +81,7 @@ export default function Studio({
     setBusy("visuals");
     setError("");
     try {
-      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), ideas, team, orientation, channel, brief, textMode, depth });
+      const { visuals } = await api<{ visuals: Visual[] }>("/api/visuals", { brand: brand && forAi(brand), logo: brand?.logo, ideas, team, orientation, channel, brief, textMode, depth });
       setVisuals(visuals);
       setPosters(visuals.map((v) => ({ layout: v.layout, showText: textMode === "overlay" })));
       setTimeout(() => document.getElementById("visuals")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -520,6 +520,17 @@ export default function Studio({
                     <option value="white">Logo: white</option>
                     <option value="black">Logo: black</option>
                     <option value="badge">Logo: on badge</option>
+                  </select>
+                  <select
+                    value={p.layout.logoPos ?? "auto"}
+                    title="Where the logo sits"
+                    onChange={(e) => updatePoster(i, { layout: { ...p.layout, logoPos: e.target.value as LogoPos } })}
+                  >
+                    {LOGO_POSITIONS.map((pos) => (
+                      <option key={pos} value={pos}>
+                        {pos === "auto" ? "Logo place: auto" : `Logo ${pos.replace("-", " ")}`}
+                      </option>
+                    ))}
                   </select>
                   <select value={p.layout.position} onChange={(e) => updatePoster(i, { layout: { ...p.layout, position: e.target.value as Layout["position"] } })}>
                     {["top", "bottom", "left", "right", "center"].map((pos) => (
